@@ -1,0 +1,269 @@
+---
+title: "Chapter14 - Build a plot layer by layer"
+output: html_notebook
+---
+
+
+# 14.2 Building a plot
+
+```{r}
+p <- ggplot(mpg, aes(displ, hwy))
+p
+```
+
+```{r}
+p + geom_point()
+```
+
+```{r}
+p + layer(
+  mapping = NULL, 
+  data = NULL,
+  geom = "point", 
+  stat = "identity",
+  position = "identity"
+)
+```
+
+# 14.3 Data
+```{r}
+mod <- loess(hwy ~ displ, data = mpg)
+grid <- data_frame(displ = seq(min(mpg$displ), max(mpg$displ), length = 50))
+
+grid$hwy <- predict(mod, newdata = grid)
+
+grid
+```
+
+```{r}
+std_resid <- resid(mod) / mod$s
+outlier <- filter(mpg, abs(std_resid) > 2)
+outlier
+```
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  geom_line(data = grid, colour = "blue", size = 1.5) + 
+  geom_text(data = outlier, aes(label = model))
+```
+
+```{r}
+ggplot(mapping = aes(displ, hwy)) + 
+  geom_point(data = mpg) + 
+  geom_line(data = grid) + 
+  geom_text(data = outlier, aes(label = model))
+```
+
+## 14.3.1 Exercises
+
+### question 2
+
+```{r}
+library(dplyr)
+class <- mpg %>% 
+  group_by(class) %>% 
+  summarise(n = n(), hwy = mean(hwy))
+class
+```
+
+```{r}
+ggplot(mpg, aes(class, hwy)) +
+  geom_jitter(width = 0.1) +
+  geom_point(color = "red", data = class, size = 4) +
+  geom_text(aes(y = 5, label = paste0("n = ", n)), data = class)
+```
+
+# 14.4 Aesthetic mappings
+
+```{r}
+aes(x = displ, y = hwy, colour = class)
+```
+
+## 14.4.1 Specifying the aesthetics in the plot vs. in the layers
+
+
+```{r}
+ggplot(mpg, aes(displ, hwy, colour = class)) + 
+  geom_point()
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point(aes(colour = class))
+ggplot(mpg, aes(displ)) + 
+  geom_point(aes(y = hwy, colour = class))
+ggplot(mpg) + 
+  geom_point(aes(displ, hwy, colour = class))
+```
+
+```{r}
+ggplot(mpg, aes(displ, hwy, colour = class)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) +
+  theme(legend.position = "none")
+
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point(aes(colour = class)) + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  theme(legend.position = "none")
+```
+
+## 14.4.2 Setting vs. mapping
+
+```{r}
+ggplot(mpg, aes(cty, hwy)) + 
+  geom_point(colour = "darkblue") 
+
+ggplot(mpg, aes(cty, hwy)) + 
+  geom_point(aes(colour = "darkblue"))
+```
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() +
+  geom_smooth(aes(colour = "loess"), method = "loess", se = FALSE) + 
+  geom_smooth(aes(colour = "lm"), method = "lm", se = FALSE) +
+  labs(colour = "Method")
+```
+
+## 14.4.3 Exercises
+### question 1
+```{r}
+ggplot(mpg) + 
+  geom_point(aes(displ, hwy))
+
+ggplot() + 
+ geom_point(aes(cty, hwy), data = mpg) +
+ geom_smooth(aes(cty, hwy), data = mpg)
+
+ggplot(msleep, aes(log(brainwt), log(bodywt))) + 
+  geom_point()
+```
+
+### question 2
+
+```{r}
+ggplot(mpg) +
+  geom_point(aes(class, cty)) + 
+  geom_boxplot(aes(trans, hwy))
+```
+
+### question 3
+```{r}
+ggplot(mpg) +
+  geom_point(aes(hwy, cyl)) +
+  geom_point(aes(drv, cty))
+```
+
+
+```{r}
+ggplot(mpg) +
+  geom_point(aes(drv, cty)) +
+  geom_point(aes(hwy, cyl))
+```
+
+
+
+# 14.6 Stats
+
+```{r}
+ggplot(mpg, aes(trans, cty)) + 
+  geom_point() + 
+  stat_summary(geom = "point", fun = "mean", colour = "red", size = 4)
+
+ggplot(mpg, aes(trans, cty)) + 
+  geom_point() + 
+  geom_point(stat = "summary", fun = "mean", colour = "red", size = 4)
+```
+
+
+## 14.6.1 Generated variables
+
+```{r}
+ggplot(diamonds, aes(price)) + 
+  geom_histogram(binwidth = 500)
+ggplot(diamonds, aes(price)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 500)
+```
+
+
+This technique is particularly useful when you want to compare the distribution of multiple groups that have very different sizes.
+```{r}
+ggplot(diamonds, aes(price, colour = cut)) + 
+  geom_freqpoly(binwidth = 500) +
+  theme(legend.position = "none")
+
+ggplot(diamonds, aes(price, colour = cut)) + 
+  geom_freqpoly(aes(y = after_stat(density)), binwidth = 500) + 
+  theme(legend.position = "none")
+```
+
+
+## 14.6.2 Exercises
+
+### question 1
+
+```{r}
+mod <- loess(hwy ~ displ, data = mpg)
+smoothed <- data.frame(displ = seq(1.6, 7, length = 50))
+pred <- predict(mod, newdata = smoothed, se = TRUE) 
+smoothed$hwy <- pred$fit
+smoothed$hwy_lwr <- pred$fit - 1.96 * pred$se.fit
+smoothed$hwy_upr <- pred$fit + 1.96 * pred$se.fit
+
+
+ggplot(mpg, aes(displ, hwy)) +
+  geom_point() +
+  geom_ribbon(aes(ymin = hwy_lwr, ymax = hwy_upr, color = "red"), data = smoothed, fill = "grey", alpha = 0.5) +
+  geom_line(data = smoothed) 
+```
+
+
+### question 3
+
+```{r}
+ggplot(mpg, aes(trans, drv)) +
+  geom_count(aes(size = after_stat(prop), group = 1))
+
+# sum up to the one in y axis
+ggplot(mpg, aes(trans, drv)) +
+  geom_count(aes(size = after_stat(prop), group = drv))
+
+# sum up to the one in x axis
+ggplot(mpg, aes(trans, drv)) +
+  geom_count(aes(size = after_stat(prop), group = trans)) 
+
+# +
+#   scale_size_area(max_size = 10)
+```
+
+
+# 14.7 Position adjustments
+
+```{r}
+dplot <- ggplot(diamonds, aes(color, fill = cut)) + 
+  xlab(NULL) + ylab(NULL) + theme(legend.position = "none")
+# position stack is the default for bars, so `geom_bar()` 
+# is equivalent to `geom_bar(position = "stack")`.
+dplot + geom_bar()
+dplot + geom_bar(position = "fill")
+dplot + geom_bar(position = "dodge")
+```
+
+```{r}
+dplot + geom_bar(position = "identity", alpha = 1 / 2, colour = "grey50")
+
+ggplot(diamonds, aes(color, colour = cut)) + 
+  geom_line(aes(group = cut), stat = "count") + 
+  xlab(NULL) + ylab(NULL) + 
+  theme(legend.position = "none")
+```
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point(position = "jitter")
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point(position = position_jitter(width = 0.05, height = 0.5))
+
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_jitter(width = 0.05, height = 0.5)
+```
+

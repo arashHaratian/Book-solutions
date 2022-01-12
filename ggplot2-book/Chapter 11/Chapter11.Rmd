@@ -1,0 +1,383 @@
+---
+title: "Chapter11 - Colour scales and legends"
+output: html_notebook
+---
+
+# 11.2 Continuous colour scales
+
+
+```{r}
+erupt <- ggplot(faithfuld, aes(waiting, eruptions, fill = density)) +
+  geom_raster() +
+  scale_x_continuous(NULL, expand = c(0, 0)) + 
+  scale_y_continuous(NULL, expand = c(0, 0)) + 
+  theme(legend.position = "none")
+```
+
+## 11.2.1 Particular palettes
+
+```{r}
+erupt
+erupt + scale_fill_viridis_c()
+erupt + scale_fill_viridis_c(option = "magma")
+```
+
+```{r}
+erupt + scale_fill_distiller()
+erupt + scale_fill_distiller(palette = "RdPu")
+erupt + scale_fill_distiller(palette = "YlOrBr")
+```
+
+```{r}
+erupt + scico::scale_fill_scico(palette = "bilbao") # the default
+erupt + scico::scale_fill_scico(palette = "vik")
+erupt + scico::scale_fill_scico(palette = "lajolla")
+```
+
+```{r}
+erupt + paletteer::scale_fill_paletteer_c("viridis::plasma")
+erupt + paletteer::scale_fill_paletteer_c("scico::tokyo")
+erupt + paletteer::scale_fill_paletteer_c("gameofthrones::targaryen")
+```
+
+## 11.2.2 Robust recipes
+
+```{r}
+erupt
+erupt + scale_fill_continuous()
+erupt + scale_fill_gradient()
+```
+
+
+```{r}
+erupt + scale_fill_gradient(low = "grey", high = "brown")
+erupt + scale_fill_gradient2(low = "grey", mid = "white", high = "brown", midpoint = .02)
+erupt + scale_fill_gradientn(colours = terrain.colors(7))
+```
+
+```{r}
+munsell::hue_slice("5P") +  # generate a ggplot with hue_slice()
+  annotate(                 # add arrows for annotation 
+    geom = "segment", 
+    x = c(7, 7), 
+    y = c(1, 10), 
+    xend = c(7, 7), 
+    yend = c(2, 9), 
+    arrow = arrow(length = unit(2, "mm"))
+  ) 
+
+# construct scale
+erupt + scale_fill_gradient(
+  low = munsell::mnsl("5P 2/12"), 
+  high = munsell::mnsl("5P 7/12")
+)
+```
+
+```{r}
+# munsell example
+erupt + scale_fill_gradient2(
+  low = munsell::mnsl("5B 7/8"),
+  high = munsell::mnsl("5Y 7/8"),
+  mid = munsell::mnsl("N 7/0"),
+  midpoint = .02
+) 
+
+# colorspace examples
+erupt + scale_fill_gradientn(colours = colorspace::heat_hcl(7))
+erupt + scale_fill_gradientn(colours = colorspace::diverge_hcl(7))
+```
+
+## 11.2.3 Missing values
+```{r}
+df <- data.frame(x = 1, y = 1:5, z = c(1, 3, 2, NA, 5))
+base <- ggplot(df, aes(x, y)) + 
+  geom_tile(aes(fill = z), size = 5) + 
+  labs(x = NULL, y = NULL)
+
+base
+base + scale_fill_gradient(na.value = NA)
+base + scale_fill_gradient(na.value = "yellow")
+```
+
+## 11.2.4 Limits, breaks, and labels
+
+```{r}
+toy <- data.frame(
+  const = 1, 
+  up = 1:4,
+  txt = letters[1:4], 
+  big = (1:4)*1000,
+  log = c(2, 5, 10, 2000)
+)
+leg <- ggplot(toy, aes(up, up, fill = big)) + 
+  geom_tile() + 
+  labs(x = NULL, y = NULL) 
+leg + scale_fill_continuous(breaks = NULL)
+```
+
+# 11.3 Discrete colour scales
+
+```{r}
+df <- data.frame(x = c("a", "b", "c", "d"), y = c(3, 4, 1, 2))
+bars <- ggplot(df, aes(x, y, fill = x)) + 
+  geom_bar(stat = "identity") + 
+  labs(x = NULL, y = NULL) +
+  theme(legend.position = "none")
+```
+
+```{r}
+bars
+bars + scale_fill_discrete()
+bars + scale_fill_hue()
+```
+
+## 11.3.1 Brewer scales
+
+```{r}
+RColorBrewer::display.brewer.all()
+```
+
+```{r}
+bars + scale_fill_brewer(palette = "Set1")
+bars + scale_fill_brewer(palette = "Set2")
+bars + scale_fill_brewer(palette = "Accent")
+```
+
+```{r}
+# scatter plot
+df <- data.frame(x = 1:3 + runif(30), y = runif(30), z = c("a", "b", "c"))
+point <- ggplot(df, aes(x, y)) +
+  geom_point(aes(colour = z))  + 
+  theme(legend.position = "none") +
+  labs(x = NULL, y = NULL)
+
+# three palettes
+point + scale_colour_brewer(palette = "Set1")
+point + scale_colour_brewer(palette = "Set2")  
+point + scale_colour_brewer(palette = "Pastel1")
+```
+
+```{r}
+# bar plot
+df <- data.frame(x = 1:3, y = 3:1, z = c("a", "b", "c"))
+area <- ggplot(df, aes(x, y)) + 
+  geom_bar(aes(fill = z), stat = "identity") + 
+  theme(legend.position = "none") +
+  labs(x = NULL, y = NULL)
+
+# three palettes
+area + scale_fill_brewer(palette = "Set1")
+area + scale_fill_brewer(palette = "Set2")
+area + scale_fill_brewer(palette = "Pastel1")
+```
+
+## 11.3.2 Hue and grey scales
+
+```{r}
+bars
+bars + scale_fill_hue(c = 40)
+bars + scale_fill_hue(h = c(180, 300))
+```
+
+
+```{r}
+bars + scale_fill_grey()
+bars + scale_fill_grey(start = 0.5, end = 1)
+bars + scale_fill_grey(start = 0, end = 0.5)
+```
+
+## 11.3.3 Manual scales
+
+```{r}
+bars + scale_fill_manual(values = c("sienna1", "sienna4", "hotpink1", "hotpink4"))
+bars + scale_fill_manual(values = c("tomato1", "tomato2", "tomato3", "tomato4"))
+bars + scale_fill_manual(values = c("grey", "black", "grey", "grey"))
+```
+
+```{r}
+bars + scale_fill_manual(values = c(
+  "d" = "grey",
+  "c" = "grey",
+  "b" = "black",
+  "a" = "grey"
+))
+```
+
+## 11.3.4 Exercises
+### question 1
+```{r}
+ggplot(mpg, aes(displ, hwy, color = drv)) +
+  geom_point() +
+  scale_color_discrete(labels = c("4wd", "fwd", "rwd"))
+```
+# 11.4 Binned colour scales
+```{r}
+erupt + scale_fill_binned()
+```
+
+```{r}
+erupt + scale_fill_steps()
+```
+
+```{r}
+erupt + scale_fill_steps(n.breaks = 8)
+```
+
+```{r}
+erupt + scale_fill_steps(low = "grey", high = "brown")
+```
+
+```{r}
+erupt + scale_fill_steps2(low = "grey", mid = "white", high = "brown", midpoint = .02)
+```
+
+```{r}
+erupt + scale_fill_stepsn(n.breaks = 12, colours = terrain.colors(12))
+```
+
+```{r}
+erupt + scale_fill_fermenter(n.breaks = 9)
+```
+
+```{r}
+erupt + scale_fill_fermenter(n.breaks = 9, palette = "Oranges")
+```
+
+```{r}
+erupt + scale_fill_fermenter(n.breaks = 9, palette = "PuOr")
+```
+
+# 11.6 Legends
+
+## 11.6.1 Positioning
+
+```{r}
+base <- ggplot(toy, aes(up, up)) + 
+  geom_point(aes(colour = txt), size = 3) + 
+  xlab(NULL) + 
+  ylab(NULL)
+
+base + theme(legend.position = "left")
+base + theme(legend.position = "right") # the default 
+base + theme(legend.position = "bottom")
+base + theme(legend.position = "none")
+```
+
+```{r}
+base <- ggplot(toy, aes(up, up)) + 
+  geom_point(aes(colour = txt), size = 3)
+
+base + theme(legend.position = c(0, 1), legend.justification = c(0, 1))
+base + theme(legend.position = c(0.5, 0.5), legend.justification = c(0.5, 0.5))
+base + theme(legend.position = c(1, 0), legend.justification = c(1, 0))
+```
+There’s also a margin around the legends, which you can suppress with `legend.margin = unit(0, "mm")`.
+
+
+# 11.7 Legend key glyphs
+
+```{r}
+base <- ggplot(economics, aes(date, psavert, color = "savings"))
+
+base + geom_line()
+base + geom_line(key_glyph = "timeseries")
+```
+
+## 11.7.1 guide_legend()
+
+```{r}
+base <- ggplot(mpg, aes(drv, fill = factor(cyl))) + geom_bar() 
+
+base
+base + guides(fill = guide_legend(ncol = 2))
+base + guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+```
+
+```{r}
+base
+base + guides(fill = guide_legend(reverse = TRUE))
+```
+
+```{r}
+base
+base + guides(fill = guide_legend(reverse = TRUE))
+```
+
+## 11.7.2 guide_bins()
+
+```{r}
+base <- ggplot(mpg, aes(displ, manufacturer, size = hwy)) +
+  geom_point(alpha = .2) +
+  scale_size_binned()
+```
+
+```{r}
+base + guides(size = guide_bins(direction = "vertical"))
+base + guides(size = guide_bins(direction = "horizontal"))
+```
+
+```{r}
+base + guides(size = guide_bins(show.limits = TRUE))
+base + guides(
+  size = guide_bins(
+    axis.colour = "red",
+    axis.arrow = arrow(
+      length = unit(.1, "inches"), 
+      ends = "first", 
+      type = "closed"
+    )
+  )
+)
+```
+
+## 11.7.3 guide_colourbar() / guide_colorbar()
+
+```{r}
+base <- ggplot(mpg, aes(cyl, displ, colour = hwy)) +
+  geom_point(size = 2)
+
+base
+base + guides(colour = guide_colourbar(reverse = TRUE))
+base + guides(colour = guide_colourbar(barheight = unit(2, "cm")))
+```
+
+## 11.7.4 guide_coloursteps() / guide_colorsteps()
+
+```{r}
+base <- ggplot(mpg, aes(displ, hwy, colour = cyl)) + 
+  geom_point() + 
+  scale_color_binned()
+
+base + guides(colour = guide_coloursteps(show.limits = TRUE))
+base + guides(colour = guide_coloursteps(show.limits = FALSE))
+```
+
+## 11.7.5 Exercises
+
+### question 1
+
+```{r}
+ggplot(toy, aes(up, up)) + 
+  geom_point(aes(colour = txt), size = 3) + 
+  xlab(NULL) + 
+  ylab(NULL) +
+  theme(legend.position = "left")
+```
+
+### question 2
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) +
+geom_point(aes(color = drv, shape = drv)) +
+  labs(color = "Drive train", shape = "Drive train")
+```
+
+
+### question 3
+```{r}
+ggplot(mpg, aes(displ, hwy, color = class)) +
+  geom_point(key_glyph = draw_key_path) +
+  geom_smooth(method = "lm", se = F) +
+  theme(legend.position = "bottom")
+```
+

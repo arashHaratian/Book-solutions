@@ -1,0 +1,135 @@
+---
+title: "Chapter13 - Why reactivity?"
+output: html_notebook
+---
+
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+```
+
+
+# 13.2 Why reactive programming?
+
+## 13.2.1 Why can’t you use variables?
+
+```{r}
+temp_c <- 10
+temp_f <- (temp_c * 9 / 5) + 32
+temp_f
+```
+```{r}
+temp_c <- 30
+temp_f
+```
+
+## 13.2.2 What about functions?
+
+```{r}
+temp_c <- 10
+temp_f <- function() {
+  message("Converting") 
+  (temp_c * 9 / 5) + 32
+}
+temp_f()
+```
+
+
+This solves the first problem that reactivity is trying to solve: whenever you access temp_f() you get the latest computation:
+
+```{r}
+temp_c <- -3
+temp_f() 
+```
+
+It doesn’t, however, minimise computation. Every time you call temp_f() it recomputes:
+
+```{r}
+temp_f() 
+```
+
+## 13.2.3 Event-driven programming
+
+
+```{r}
+DynamicValue <- R6::R6Class("DynamicValue", list(
+  value = NULL,
+  on_update = NULL,
+
+  get = function() self$value,
+
+  set = function(value) {
+    self$value <- value
+    if (!is.null(self$on_update)) 
+      self$on_update(value)
+    invisible(self)
+  },
+  
+  onUpdate = function(on_update) {
+    self$on_update <- on_update
+    invisible(self)
+  }
+))
+```
+
+
+```{r}
+temp_c <- DynamicValue$new()
+temp_c$onUpdate(function(value) {
+  message("Converting") 
+  temp_f <<- (value * 9 / 5) + 32
+})
+
+temp_c$set(10)
+temp_f
+
+temp_c$set(-3)
+temp_f
+```
+
+
+## 13.2.4 Reactive programming
+
+
+
+using a special Shiny mode, `reactiveConsole(TRUE)`, that makes it possible to experiment with reactivity directly in the console. 
+ 
+```{r}
+library(shiny)
+reactiveConsole(TRUE)
+```
+
+```{r}
+temp_c <- reactiveVal(10) # create
+temp_c()                  # get
+
+temp_c(20)                # set
+temp_c()                  # get
+
+
+# Now we can create a reactive expression that depends on this value
+temp_f <- reactive({
+  message("Converting") 
+  (temp_c() * 9 / 5) + 32
+})
+temp_f()
+
+# a reactive expression automatically tracks all of its dependencies
+temp_c(-3)
+temp_c(-10)
+temp_f()
+
+temp_f()
+```
+
+A reactive expression has two important properties:
+
+* It’s **lazy**: it doesn’t do any work until it’s called.
+
+* It’s **cached**: it doesn’t do any work the second and subsequent times it’s called because it caches the previous result.
+

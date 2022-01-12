@@ -1,0 +1,66 @@
+---
+title: "Chapter19 - Programming with ggplot2"
+output: html_notebook
+---
+
+
+# 19.2 Single components
+Each component of a ggplot plot is an object. Most of the time you create the component and immediately add it to a plot, but you don’t have to. Instead, you can save any component to a variable (giving it a name), and then add it to multiple plots:
+```{r}
+bestfit <- geom_smooth(
+  method = "lm", 
+  se = FALSE, 
+  colour = alpha("steelblue", 0.5), 
+  size = 2
+)
+ggplot(mpg, aes(cty, hwy)) + 
+  geom_point() + 
+  bestfit
+
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  bestfit
+
+```
+
+
+```{r}
+geom_lm <- function(formula = y ~ x, colour = alpha("steelblue", 0.5), 
+                    size = 2, ...)  {
+  geom_smooth(formula = formula, se = FALSE, method = "lm", colour = colour,
+    size = size, ...)
+}
+ggplot(mpg, aes(displ, 1 / hwy)) + 
+  geom_point() + 
+  geom_lm()
+ggplot(mpg, aes(displ, 1 / hwy)) + 
+  geom_point() + 
+  geom_lm(y ~ poly(x, 2), size = 1, colour = "red")
+```
+
+
+# 19.3 Multiple components
+
+```{r}
+geom_mean <- function() {
+  list(
+    stat_summary(fun = "mean", geom = "bar", fill = "grey70"),
+    stat_summary(fun.data = "mean_cl_normal", geom = "errorbar", width = 0.4)
+  )
+}
+ggplot(mpg, aes(class, cty)) + geom_mean()
+ggplot(mpg, aes(drv, cty)) + geom_mean()
+```
+
+```{r}
+geom_mean <- function(se = TRUE) {
+  list(
+    stat_summary(fun = "mean", geom = "bar", fill = "grey70"),
+    if (se) 
+      stat_summary(fun.data = "mean_cl_normal", geom = "errorbar", width = 0.4)
+  )
+}
+ggplot(mpg, aes(drv, cty)) + geom_mean()
+ggplot(mpg, aes(drv, cty)) + geom_mean(se = FALSE)
+```
+

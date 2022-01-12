@@ -1,0 +1,505 @@
+---
+title: "Chapter5 - Case study: ER injuries"
+output: html_notebook
+---
+
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+library(vroom)
+library(tidyverse)
+library(neiss)
+```
+
+
+creating `.tsv` files:
+```{r}
+top_prod <- injuries %>% 
+  filter(trmt_date >= as.Date("2017-01-01"), trmt_date < as.Date("2018-01-01")) %>% 
+  count(prod1, sort = TRUE) %>% 
+  filter(n > 5 * 365)
+
+injuries %>%
+  filter(trmt_date >= as.Date("2017-01-01"), trmt_date < as.Date("2018-01-01")) %>%
+  semi_join(top_prod, by = "prod1") %>%
+  mutate(age = floor(age), sex = tolower(sex), race = tolower(race)) %>%
+  filter(sex != "unknown") %>%
+  select(trmt_date, age, sex, race, body_part, diag, location, prod_code = prod1, weight, narrative) %>%
+  vroom::vroom_write("neiss/injuries.tsv.gz")
+
+products %>%
+  semi_join(top_prod, by = c("code" = "prod1")) %>%
+  rename(prod_code = code) %>%
+  vroom::vroom_write("neiss/products.tsv")
+
+population %>%
+  filter(year == 2017) %>%
+  select(-year) %>%
+  rename(population = n) %>%
+  vroom::vroom_write("neiss/population.tsv")
+```
+
+# 5.2 The data
+
+
+```{r}
+injuries <- vroom::vroom("neiss/injuries.tsv.gz")
+injuries
+```
+
+```{r}
+products <- vroom::vroom("neiss/products.tsv")
+products
+population <- vroom::vroom("neiss/population.tsv")
+population
+```
+
+# 5.3 Exploration
+
+```{r}
+selected <- injuries %>% filter(prod_code == 649)
+nrow(selected)
+selected %>% count(location, wt = weight, sort = TRUE)
+selected %>% count(body_part, wt = weight, sort = TRUE)
+selected %>% count(diag, wt = weight, sort = TRUE)
+```
+
+
+
+```{r}
+summary <- selected %>% 
+  count(age, sex, wt = weight)
+summary
+
+summary %>% 
+  ggplot(aes(age, n, colour = sex)) + 
+  geom_line() + 
+  labs(y = "Estimated number of injuries")
+```
+
+```{r}
+summary <- selected %>% 
+  count(age, sex, wt = weight) %>% 
+  left_join(population, by = c("age", "sex")) %>% 
+  mutate(rate = n / population * 1e4)
+
+summary
+```
+```{r}
+summary %>% 
+  ggplot(aes(age, rate, colour = sex)) + 
+  geom_line(na.rm = TRUE) + 
+  labs(y = "Injuries per 10,000 people")
+```
+
+```{r}
+selected %>% 
+  sample_n(10) %>% 
+  pull(narrative)
+```
+
+# 5.4 Prototype
+
+> When designing a first prototype, the challenge is in making it “as simple as possible”. There’s a tension between getting the basics working quickly and planning for the future of the app. To help get the balance right, I often do a few pencil-and-paper sketches to rapidly explore the UI and reactive graph before committing to code.
+
+
+```{r}
+ui <- fluidPage(
+  fluidRow(
+    column(6,
+      selectInput("code", "Product", setNames(products$prod_code, products$title))
+    )
+  ),
+  fluidRow(
+    column(4, tableOutput("diag")),
+    column(4, tableOutput("body_part")),
+    column(4, tableOutput("location"))
+  ),
+  fluidRow(
+    column(12, plotOutput("age_sex"))
+  )
+)
+
+server <- function(input, output, session) {
+  selected <- reactive(injuries %>% filter(prod_code == input$code))
+
+  output$diag <- renderTable(
+    selected() %>% count(diag, wt = weight, sort = TRUE)
+  )
+  output$body_part <- renderTable(
+    selected() %>% count(body_part, wt = weight, sort = TRUE)
+  )
+  output$location <- renderTable(
+    selected() %>% count(location, wt = weight, sort = TRUE)
+  )
+
+  summary <- reactive({
+    selected() %>%
+      count(age, sex, wt = weight) %>%
+      left_join(population, by = c("age", "sex")) %>%
+      mutate(rate = n / population * 1e4)
+  })
+
+  output$age_sex <- renderPlot({
+    summary() %>%
+      ggplot(aes(age, n, colour = sex)) +
+      geom_line() +
+      labs(y = "Estimated number of injuries")
+  }, res = 96)
+}
+shinyApp(ui, server)
+```
+
+
+# 5.5 Polish tables
+
+```{r}
+injuries %>%
+  mutate(diag = fct_lump(fct_infreq(diag), n = 5)) %>%
+  group_by(diag) %>%
+  summarise(n = as.integer(sum(weight)))
+```
+
+
+```{r}
+count_top <- function(df, var, n = 5) {
+  df %>%
+    mutate({{ var }} := fct_lump(fct_infreq({{ var }}), n = n)) %>%
+    group_by({{ var }}) %>%
+    summarise(n = as.integer(sum(weight)))
+}
+```
+
+
+```{r}
+server <- function(input, output, session){
+  selected <- reactive(injuries %>% filter(prod_code == input$code))
+  output$diag <- renderTable(count_top(selected(), diag), width = "100%")
+  output$body_part <- renderTable(count_top(selected(), body_part), width = "100%")
+  output$location <- renderTable(count_top(selected(), location), width = "100%")
+  summary <- reactive({
+    selected() %>%
+      count(age, sex, wt = weight) %>%
+      left_join(population, by = c("age", "sex")) %>%
+      mutate(rate = n / population * 1e4)
+  })
+
+  output$age_sex <- renderPlot({
+    summary() %>%
+      ggplot(aes(age, n, colour = sex)) +
+      geom_line() +
+      labs(y = "Estimated number of injuries")
+  }, res = 96)
+}
+
+shinyApp(ui, server)
+```
+
+```{r}
+ui <- fluidPage(
+  fluidRow(
+    column(8,
+      selectInput("code", "Product",
+        choices = setNames(products$prod_code, products$title),
+        width = "100%"
+      )
+    ),
+    column(2, selectInput("y", "Y axis", c("rate", "count")))
+  ),
+  fluidRow(
+    column(4, tableOutput("diag")),
+    column(4, tableOutput("body_part")),
+    column(4, tableOutput("location"))
+  ),
+  fluidRow(
+    column(12, plotOutput("age_sex"))
+  )
+)
+
+server <- function(input, output, session){
+  selected <- reactive(injuries %>% filter(prod_code == input$code))
+  output$diag <- renderTable(count_top(selected(), diag), width = "100%")
+  output$body_part <- renderTable(count_top(selected(), body_part), width = "100%")
+  output$location <- renderTable(count_top(selected(), location), width = "100%")
+  summary <- reactive({
+    selected() %>%
+      count(age, sex, wt = weight) %>%
+      left_join(population, by = c("age", "sex")) %>%
+      mutate(rate = n / population * 1e4)
+  })
+
+   output$age_sex <- renderPlot({
+    if (input$y == "count") {
+      summary() %>%
+        ggplot(aes(age, n, colour = sex)) +
+        geom_line() +
+        labs(y = "Estimated number of injuries")
+    } else {
+      summary() %>%
+        ggplot(aes(age, rate, colour = sex)) +
+        geom_line(na.rm = TRUE) +
+        labs(y = "Injuries per 10,000 people")
+    }
+  }, res = 96)
+
+}
+shinyApp(ui, server)
+``` 
+
+# 5.7 Narrative
+
+```{r}
+ui <- fluidPage(
+  fluidRow(
+    column(8,
+      selectInput("code", "Product",
+        choices = setNames(products$prod_code, products$title),
+        width = "100%"
+      )
+    ),
+    column(2, selectInput("y", "Y axis", c("rate", "count")))
+  ),
+  fluidRow(
+    column(4, tableOutput("diag")),
+    column(4, tableOutput("body_part")),
+    column(4, tableOutput("location"))
+  ),
+  fluidRow(
+    column(12, plotOutput("age_sex"))
+  ),
+    fluidRow(
+    column(2, actionButton("story", "Tell me a story")),
+    column(10, textOutput("narrative"))
+  )
+)
+
+server <- function(input, output, session){
+  selected <- reactive(injuries %>% filter(prod_code == input$code))
+  output$diag <- renderTable(count_top(selected(), diag), width = "100%")
+  output$body_part <- renderTable(count_top(selected(), body_part), width = "100%")
+  output$location <- renderTable(count_top(selected(), location), width = "100%")
+  summary <- reactive({
+    selected() %>%
+      count(age, sex, wt = weight) %>%
+      left_join(population, by = c("age", "sex")) %>%
+      mutate(rate = n / population * 1e4)
+  })
+
+   output$age_sex <- renderPlot({
+    if (input$y == "count") {
+      summary() %>%
+        ggplot(aes(age, n, colour = sex)) +
+        geom_line() +
+        labs(y = "Estimated number of injuries")
+    } else {
+      summary() %>%
+        ggplot(aes(age, rate, colour = sex)) +
+        geom_line(na.rm = TRUE) +
+        labs(y = "Injuries per 10,000 people")
+    }
+  }, res = 96)
+   
+   
+ output$narrative <- renderText({
+    input$story
+    selected() %>% pull(narrative) %>% sample(1)
+  })
+}
+shinyApp(ui, server)
+```
+
+# 5.8 Exercises
+
+### question 2
+```{r}
+diag <- injuries %>%
+  mutate(diag = fct_lump(fct_infreq(diag), n = 5)) %>%
+  pull(diag)
+
+levels(diag)
+
+
+diag <- injuries %>%
+  mutate(diag = fct_infreq(fct_lump(diag, n = 5))) %>%
+  pull(diag)
+
+levels(diag)
+```
+
+
+### question 3
+
+
+```{r}
+
+ui <- fluidPage(
+  fluidRow(
+    column(8,
+      selectInput("code", "Product",
+        choices = setNames(products$prod_code, products$title),
+        width = "100%"
+      )
+    ),
+    column(2, selectInput("y", "Y axis", c("rate", "count"))),
+    column(2, numericInput("nrow", "# rows", value = 5, min = 1 , max = 10))
+  ),
+  fluidRow(
+    column(4, tableOutput("diag")),
+    column(4, tableOutput("body_part")),
+    column(4, tableOutput("location"))
+  ),
+  fluidRow(
+    column(12, plotOutput("age_sex"))
+  ),
+    fluidRow(
+    column(2, actionButton("story", "Tell me a story")),
+    column(10, textOutput("narrative"))
+  )
+)
+
+server <- function(input, output, session){
+  selected <- reactive(injuries %>% filter(prod_code == input$code))
+  
+    max_no_rows <- reactive(
+    max(length(unique(selected()$diag)),
+        length(unique(selected()$body_part)),
+        length(unique(selected()$location)))
+  )
+  observeEvent(input$code, {
+    updateNumericInput(session, "nrow", max = max_no_rows())
+  })
+  table_rows <- reactive(input$nrow)
+  output$diag <- renderTable(count_top(selected(), diag, n = table_rows()), width = "100%")
+  output$body_part <- renderTable(count_top(selected(), body_part, n = table_rows()), width = "100%")
+  output$location <- renderTable(count_top(selected(), location, n = table_rows()), width = "100%")
+  summary <- reactive({
+    selected() %>%
+      count(age, sex, wt = weight) %>%
+      left_join(population, by = c("age", "sex")) %>%
+      mutate(rate = n / population * 1e4)
+  })
+   
+   output$age_sex <- renderPlot({
+    if (input$y == "count") {
+      summary() %>%
+        ggplot(aes(age, n, colour = sex)) +
+        geom_line() +
+        labs(y = "Estimated number of injuries")
+    } else {
+      summary() %>%
+        ggplot(aes(age, rate, colour = sex)) +
+        geom_line(na.rm = TRUE) +
+        labs(y = "Injuries per 10,000 people")
+    }
+  }, res = 96)
+   
+   
+ output$narrative <- renderText({
+    input$story
+    selected() %>% pull(narrative) %>% sample(1)
+  })
+}
+shinyApp(ui, server)
+```
+
+
+### question 4
+
+```{r}
+ui <- fluidPage(
+  fluidRow(
+    column(8,
+      selectInput("code", "Product",
+        choices = setNames(products$prod_code, products$title),
+        width = "100%"
+      )
+    ),
+    column(2, selectInput("y", "Y axis", c("rate", "count"))),
+    column(2, numericInput("nrow", "# rows", value = 5, min = 1 , max = 10))
+  ),
+  fluidRow(
+    column(4, tableOutput("diag")),
+    column(4, tableOutput("body_part")),
+    column(4, tableOutput("location"))
+  ),
+  fluidRow(
+    column(12, plotOutput("age_sex"))
+  ),
+    fluidRow(
+    column(2, actionButton("prev_story", "Previous story")),
+    column(8, textOutput("narrative")),
+    column(2, actionButton("next_story", "Next story")),
+  )
+)
+
+
+index_val <- 1
+server <- function(input, output, session){
+  selected <- reactive(injuries %>% filter(prod_code == input$code))
+  
+    max_no_rows <- reactive(
+    max(length(unique(selected()$diag)),
+        length(unique(selected()$body_part)),
+        length(unique(selected()$location)))
+  )
+  observeEvent(input$code, {
+    updateNumericInput(session, "nrow", max = max_no_rows())
+  })
+  table_rows <- reactive(input$nrow)
+  output$diag <- renderTable(count_top(selected(), diag, n = table_rows()), width = "100%")
+  output$body_part <- renderTable(count_top(selected(), body_part, n = table_rows()), width = "100%")
+  output$location <- renderTable(count_top(selected(), location, n = table_rows()), width = "100%")
+  summary <- reactive({
+    selected() %>%
+      count(age, sex, wt = weight) %>%
+      left_join(population, by = c("age", "sex")) %>%
+      mutate(rate = n / population * 1e4)
+  })
+   
+   output$age_sex <- renderPlot({
+    if (input$y == "count") {
+      summary() %>%
+        ggplot(aes(age, n, colour = sex)) +
+        geom_line() +
+        labs(y = "Estimated number of injuries")
+    } else {
+      summary() %>%
+        ggplot(aes(age, rate, colour = sex)) +
+        geom_line(na.rm = TRUE) +
+        labs(y = "Injuries per 10,000 people")
+    }
+  }, res = 96)
+   
+   
+   max_len <- reactive(length(selected()$narrative))
+   
+   
+   next_index <- eventReactive(input$next_story,{
+     index_val + 1
+   })
+   
+   prev_index <- eventReactive(input$prev_story,{
+     index_val - 1
+   })
+   observeEvent(input$next_story, {
+     print(next_index())
+     index_val <<- next_index()
+   })
+   
+   observeEvent(input$prev_story, {
+     print(prev_index())
+     index_val <<- prev_index()
+   })
+   
+   output$narrative <- renderText({
+      selected()$narrative[index_val]
+   })
+}
+shinyApp(ui, server)
+```
+

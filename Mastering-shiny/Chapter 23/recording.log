@@ -1,0 +1,21 @@
+# version: 1
+# target_url: http://127.0.0.1:7483
+# target_type: R/Shiny
+{"type":"REQ_HOME","begin":"2020-12-23T10:05:27.260Z","end":"2020-12-23T10:05:27.339Z","status":200,"url":"/"}
+{"type":"WS_OPEN","begin":"2020-12-23T10:05:27.987Z","url":"/websocket/"}
+{"type":"WS_RECV_INIT","begin":"2020-12-23T10:05:28.034Z","message":"{\"config\":{\"workerId\":\"\",\"sessionId\":\"${SESSION}\",\"user\":null}}"}
+{"type":"WS_SEND","begin":"2020-12-23T10:05:28.089Z","message":"{\"method\":\"init\",\"data\":{\"reset:shiny.action\":0,\"name\":\"\",\".clientdata_output_greeting_hidden\":false,\".clientdata_pixelratio\":2,\".clientdata_url_protocol\":\"http:\",\".clientdata_url_hostname\":\"127.0.0.1\",\".clientdata_url_port\":\"8600\",\".clientdata_url_pathname\":\"/\",\".clientdata_url_search\":\"\",\".clientdata_url_hash_initial\":\"\",\".clientdata_url_hash\":\"\",\".clientdata_singletons\":\"\"}}"}
+{"type":"WS_RECV","begin":"2020-12-23T10:05:28.201Z","message":"{\"errors\":{\"greeting\":{\"message\":\"\",\"call\":\"NULL\",\"type\":[\"shiny.silent.error\",\"validation\"]}},\"values\":{},\"inputMessages\":[]}"}
+{"type":"WS_SEND","begin":"2020-12-23T10:05:30.838Z","message":"{\"method\":\"update\",\"data\":{\"name\":\"a\"}}"}
+{"type":"WS_RECV","begin":"2020-12-23T10:05:30.858Z","message":"{\"errors\":{},\"values\":{\"greeting\":\"Hi a\"},\"inputMessages\":[]}"}
+{"type":"WS_SEND","begin":"2020-12-23T10:05:34.110Z","message":"{\"method\":\"update\",\"data\":{\"name\":\"\"}}"}
+{"type":"WS_RECV","begin":"2020-12-23T10:05:34.128Z","message":"{\"errors\":{\"greeting\":{\"message\":\"\",\"call\":\"NULL\",\"type\":[\"shiny.silent.error\",\"validation\"]}},\"values\":{},\"inputMessages\":[]}"}
+{"type":"WS_SEND","begin":"2020-12-23T10:05:35.615Z","message":"{\"method\":\"update\",\"data\":{\"name\":\"aras\"}}"}
+{"type":"WS_RECV","begin":"2020-12-23T10:05:35.631Z","message":"{\"errors\":{},\"values\":{\"greeting\":\"Hi aras\"},\"inputMessages\":[]}"}
+{"type":"WS_SEND","begin":"2020-12-23T10:05:36.216Z","message":"{\"method\":\"update\",\"data\":{\"name\":\"arash\"}}"}
+{"type":"WS_RECV","begin":"2020-12-23T10:05:36.237Z","message":"{\"errors\":{},\"values\":{\"greeting\":\"Hi arash\"},\"inputMessages\":[]}"}
+{"type":"WS_SEND","begin":"2020-12-23T10:05:39.357Z","message":"{\"method\":\"update\",\"data\":{\"reset:shiny.action\":1}}"}
+{"type":"WS_RECV","begin":"2020-12-23T10:05:39.371Z","message":"{\"errors\":{},\"values\":{},\"inputMessages\":[{\"id\":\"name\",\"message\":{\"value\":\"\"}}]}"}
+{"type":"WS_SEND","begin":"2020-12-23T10:05:39.377Z","message":"{\"method\":\"update\",\"data\":{\"name\":\"\"}}"}
+{"type":"WS_RECV","begin":"2020-12-23T10:05:39.392Z","message":"{\"errors\":{\"greeting\":{\"message\":\"\",\"call\":\"NULL\",\"type\":[\"shiny.silent.error\",\"validation\"]}},\"values\":{},\"inputMessages\":[]}"}
+{"type":"WS_CLOSE","begin":"2020-12-23T10:05:41.540Z"}

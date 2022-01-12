@@ -1,0 +1,135 @@
+---
+title: "Chapter1 - introduction"
+output: html_notebook
+---
+
+# 1.6 Benchmarking and profiling
+
+benchmarking is for checking the perfomance of an operation (repeatedly).
+profiling is for checking the bottleneck in the many lines of code.
+
+## 1.6.2 Benchmarking example
+
+```{r}
+library("microbenchmark")
+df <- data.frame(v = 1:4, name = letters[1:4])
+microbenchmark(df[3, 2], df[3, "name"], df$name[3])
+```
+
+
+We can set the units we want to use with the `unit` argument:
+```{r}
+library("microbenchmark")
+df = data.frame(v = 1:4, name = letters[1:4])
+microbenchmark(df[3, 2], df[3, "name"], df$name[3], unit = "ms")
+```
+
+## 1.6.3 Profiling
+
+```{r}
+library("profvis")
+profvis(expr = {
+
+  # Stage 1: load packages
+  library("rnoaa") # not necessary as data pre-saved
+  library("ggplot2")
+
+  # Stage 2: load and process data
+  out = readRDS("extdata/out-ice.Rds")
+  df = dplyr::rbind_all(out, id = "Year")
+
+  # Stage 3: visualise output
+  ggplot(df, aes(long, lat, group = paste(group, Year))) +
+    geom_path(aes(colour = Year))
+  ggsave("figures/icesheet-test.png")
+}, interval = 0.01, prof_output = "ice-prof")
+```
+
+
+
+### 1.6.3.1 Exercises
+
+```{r}
+x = 1:100 # initiate vector to cumulatively sum
+
+# Method 1: with a for loop (10 lines)
+cs_for <- function(x) {
+  for (i in x) {
+    if (i == 1) {
+      xc = x[i]
+    } else {
+      xc = c(xc, sum(x[1:i]))
+    }
+  }
+  xc
+}
+
+# Method 2: with apply (3 lines)
+cs_apply<- function(x) {
+  sapply(x, function(x) sum(1:x))
+}
+
+# Method 3: cumsum (1 line, not shown)
+microbenchmark(cs_for(x), cs_apply(x), cumsum(x))
+```
+
+#### q1
+
+(different run gives the answer in different unit)
+the `cumsum()` is 248 times faster than for loop and 210 times faster than `apply()`
+
+#### q2
+
+```{r}
+x <- 1:50000
+microbenchmark(cs_for(x), cs_apply(x), cumsum(x), unit = "s", times = 1)
+# microbenchmark(cs_for(x), cs_apply(x), cumsum(x), unit = "ns", times = 100)
+```
+still `cumsum()` is the fastest.
+
+#### q3
+
+```{r}
+df = data.frame(v = 1:4, name = letters[1:4])
+microbenchmark(df[3, 2], df[3, "name"], df$name[3])
+```
+for the first two ways, my system is slower but for the last one it's a little bit faster.
+
+#### q4
+
+```{r}
+# Test how long it takes to subset the data frame 50,000 times:
+system.time(
+  for (i in 1:50000) {
+    df[3, 2]
+  }
+)
+```
+`r 37.3*1e-6 *50000`
+
+
+```{r}
+system.time(
+  for (i in 1:50000) {
+    df[3, "name"]
+  }
+)
+```
+`r 34.9*1e-6 *50000`
+
+
+```{r}
+system.time(
+  for (i in 1:50000) {
+     df$name[3]
+  }
+)
+```
+`r 12.7*1e-6 *50000`
+
+# 1.7 Book resources
+
+```{r}
+browseVignettes(package = "efficient")
+```
+

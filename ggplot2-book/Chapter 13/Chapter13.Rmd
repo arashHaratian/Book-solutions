@@ -1,0 +1,45 @@
+---
+title: "Chapter13 - Mastering the grammar"
+output: html_notebook
+---
+
+# 13.2 Building a scatterplot
+
+```{r}
+ggplot(mpg, aes(displ, hwy, colour = factor(cyl))) +
+  geom_point()
+```
+
+
+## 13.2.1 Mapping aesthetics to data
+
+```{r}
+ggplot(mpg, aes(displ, hwy, colour = factor(cyl))) +
+  geom_line() + 
+  theme(legend.position = "none")
+ggplot(mpg, aes(displ, hwy, colour = factor(cyl))) +
+  geom_bar(stat = "identity", position = "identity", fill = NA) + 
+  theme(legend.position = "none")
+```
+
+```{r}
+ggplot(mpg, aes(displ, hwy, colour = factor(cyl))) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
+```
+
+## 13.2.2 Scaling
+
+```{r}
+vignette("ggplot2-specs")
+```
+
+
+# 13.3 Adding complexity
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() +
+  geom_smooth() + 
+  facet_wrap(~year)
+```

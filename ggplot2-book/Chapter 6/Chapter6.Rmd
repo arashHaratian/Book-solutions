@@ -1,0 +1,259 @@
+---
+title: "Chapter6 - Maps"
+output: html_notebook
+---
+
+
+# 6.1 Polygon maps
+
+```{r}
+mi_counties <- map_data("county", "michigan") %>% 
+  select(lon = long, lat, group, id = subregion)
+head(mi_counties)
+```
+
+```{r}
+ggplot(mi_counties, aes(lon, lat)) + 
+  geom_point(size = .25, show.legend = FALSE) +
+  coord_quickmap()
+
+ggplot(mi_counties, aes(lon, lat, group = group)) +
+  geom_polygon(fill = "white", colour = "grey50") + 
+  coord_quickmap()
+```
+
+use `coord_quickmap()` to adjust the axes and ensure that longitude and latitude are rendered on the same scale.
+
+
+# 6.2 Simple features maps
+
+```{r}
+library(ozmaps)
+library(sf)
+
+oz_states <- ozmaps::ozmap_states
+oz_states
+```
+
+```{r}
+ggplot(oz_states) + 
+  geom_sf() + 
+  coord_sf()
+```
+
+## 6.2.1 Layered maps
+
+```{r}
+oz_states <- ozmaps::ozmap_states %>% filter(NAME != "Other Territories")
+oz_votes <- rmapshaper::ms_simplify(ozmaps::abs_ced)
+```
+
+```{r}
+ggplot() + 
+  geom_sf(data = oz_states, mapping = aes(fill = NAME), show.legend = FALSE) +
+  geom_sf(data = oz_votes, fill = NA) + 
+  coord_sf()
+```
+
+## 6.2.2 Labelled maps
+```{r}
+# filter electorates in the Sydney metropolitan region
+sydney_map <- ozmaps::abs_ced %>% filter(NAME %in% c(
+  "Sydney", "Wentworth", "Warringah", "Kingsford Smith", "Grayndler", "Lowe", 
+  "North Sydney", "Barton", "Bradfield", "Banks", "Blaxland", "Reid", 
+  "Watson", "Fowler", "Werriwa", "Prospect", "Parramatta", "Bennelong", 
+  "Mackellar", "Greenway", "Mitchell", "Chifley", "McMahon"
+))
+
+# draw the electoral map of Sydney
+ggplot(sydney_map) + 
+  geom_sf(aes(fill = NAME), show.legend = FALSE) + 
+  coord_sf(xlim = c(150.97, 151.3), ylim = c(-33.98, -33.79)) + 
+  geom_sf_label(aes(label = NAME), label.padding = unit(1, "mm"))
+```
+
+
+## 6.2.3 Adding other geoms
+
+```{r}
+oz_capitals <- tibble::tribble( 
+  ~city,           ~lat,     ~lon,
+  "Sydney",    -33.8688, 151.2093,  
+  "Melbourne", -37.8136, 144.9631, 
+  "Brisbane",  -27.4698, 153.0251, 
+  "Adelaide",  -34.9285, 138.6007, 
+  "Perth",     -31.9505, 115.8605, 
+  "Hobart",    -42.8821, 147.3272, 
+  "Canberra",  -35.2809, 149.1300, 
+  "Darwin",    -12.4634, 130.8456, 
+)
+
+ggplot() + 
+  geom_sf(data = oz_votes) + 
+  geom_sf(data = oz_states, colour = "black", fill = NA) + 
+  geom_point(data = oz_capitals, mapping = aes(x = lon, y = lat), colour = "red") + 
+  coord_sf()
+```
+
+# 6.3 Map projections
+
+```{r}
+st_crs(oz_votes)
+```
+
+```{r}
+ggplot(oz_votes) + geom_sf()
+ggplot(oz_votes) + geom_sf() + coord_sf(crs = st_crs(3112))
+```
+
+
+# 6.4 Working with sf data
+
+
+```{r}
+edenmonaro <- ozmaps::abs_ced %>% filter(NAME == "Eden-Monaro")
+
+p <- ggplot(edenmonaro) + geom_sf()
+p + coord_sf(xlim = c(147.75, 150.25), ylim = c(-37.5, -34.5)) 
+p + coord_sf(xlim = c(150, 150.25), ylim = c(-36.3, -36)) 
+```
+
+```{r}
+edenmonaro <- edenmonaro %>% pull(geometry)
+```
+
+```{r}
+st_bbox(edenmonaro)
+```
+
+```{r}
+edenmonaro
+```
+
+```{r}
+st_cast(edenmonaro, "POLYGON")
+```
+
+```{r}
+dawson <- ozmaps::abs_ced %>% 
+  filter(NAME == "Dawson") %>% 
+  pull(geometry)
+dawson
+
+ggplot(dawson) + 
+  geom_sf() +
+  coord_sf()
+```
+
+```{r}
+dawson <- st_cast(dawson, "POLYGON")
+which.max(st_area(dawson))
+```
+```{r}
+ggplot(dawson[-69]) + 
+  geom_sf() + 
+  coord_sf()
+```
+
+# 6.5 Raster maps
+
+```{r}
+# list of all file names with time stamp 2020-01-07 21:00 GMT 
+# (BOM images are retained for 24 hours, so this will return an
+# empty vector if you run this code without editing the time stamp)
+files <- bomrang::get_available_imagery() %>%
+  stringr::str_subset("202012292100") 
+
+# use curl_download() to obtain a single file, and purrr to 
+# vectorise this operation
+purrr::walk2(
+  .x = paste0("ftp://ftp.bom.gov.au/anon/gen/gms/", files),
+  .y = file.path("raster", files),
+  .f = ~ download.file(url = .x, destfile = .y)
+)
+
+
+dir("raster")
+```
+
+```{r}
+img_vis  <- file.path("raster", "IDE00422.202012292100.tif")
+img_inf <- file.path("raster", "IDE00421.202012292100.tif")
+```
+
+
+```{r}
+library(stars)
+
+sat_vis <- read_stars("raster/IDE00420.202012292100.tif", RasterIO = list(nBufXSize = 600, nBufYSize = 600))
+sat_inf <- read_stars(img_inf, RasterIO = list(nBufXSize = 600, nBufYSize = 600))
+```
+
+
+```{r}
+sat_vis
+```
+
+
+```{r}
+ggplot() + 
+  geom_stars(data = sat_vis) + 
+  coord_equal()
+```
+
+
+```{r}
+ggplot() + 
+  geom_stars(data = sat_vis, show.legend = FALSE) +
+  facet_wrap(vars(band)) + 
+  coord_equal() + 
+  scale_fill_gradient(low = "black", high = "white")
+```
+
+
+```{r}
+oz_states <- st_transform(oz_states, crs = st_crs(sat_vis))
+```
+
+
+```{r}
+ggplot() + 
+  geom_stars(data = sat_vis, show.legend = FALSE) +
+  geom_sf(data = oz_states, fill = NA, color = "white") + 
+  coord_sf() + 
+  theme_void() + 
+  scale_fill_gradient(low = "black", high = "white")
+```
+
+```{r}
+cities <- oz_capitals %>% 
+  st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE)
+```
+
+```{r}
+cities <- st_transform(cities, st_crs(sat_vis))
+```
+
+```{r}
+ggplot() + 
+  geom_stars(data = sat_vis, show.legend = FALSE) +
+  geom_sf(data = oz_states, fill = NA, color = "white") + 
+  geom_sf(data = cities, color = "red") + 
+  coord_sf() + 
+  theme_void() + 
+  scale_fill_gradient(low = "black", high = "white")
+```
+
+
+```{r}
+ggplot() + 
+  geom_stars(data = sat_vis, show.legend = FALSE) +
+  geom_sf(data = oz_states, fill = NA, color = "white") + 
+  geom_sf(data = cities, color = "red") + 
+  geom_sf_text(data = cities, mapping = aes(label = city)) +
+  coord_sf() + 
+  theme_void() + 
+  scale_fill_gradient(low = "black", high = "white")
+
+```
+

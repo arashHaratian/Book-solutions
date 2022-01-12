@@ -1,0 +1,105 @@
+---
+title: "Chapter22 - Security"
+output: html_notebook
+---
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+```
+
+
+# 22.1 Data
+
+```{r}
+secrets <- list(
+  a = "my name",
+  b = "my birthday",
+  c = "my social security number", 
+  d = "my credit card"
+)
+
+allowed <- c("a", "b")
+ui <- fluidPage(
+  selectInput("x", "x", choices = allowed),
+  textOutput("secret")
+)
+server <- function(input, output, session) {
+  output$secret <- renderText({
+    secrets[[input$x]]
+  })
+}
+```
+
+a knowledgeable attacker can open up a javascript console in their browser and run S`hiny.setInputValue("x", "c")` to see my SSN
+
+```{r}
+server <- function(input, output, session) {
+  output$y <- renderText({
+    req(secrets$x %in% allowed)
+    secrets$y[[secrets$x == input$x]]
+  })
+}
+```
+
+# 22.2 Compute resources
+
+```{r}
+ui <- fluidPage(
+  textInput("code", "Enter code here"),
+  textOutput("results")
+)
+server <- function(input, output, session) {
+  output$results <- renderText({
+    eval(parse(text = input$code))
+  })
+}
+```
+
+
+```{r}
+df <- data.frame(x = 1:5, y = runif(5))
+mod <- lm(y ~ {print("Hi!"); x}, data = df)
+```
+
+```{r}
+title <- "foo"
+number <- 1
+glue::glue("{title}-{number}")
+```
+
+
+```{r}
+glue::glue("{title}-{print('Hi'); number}")
+```
+
+
+```{r}
+glue::glue_safe("{title}-{number}")
+glue::glue_safe("{title}-{print('Hi'); number}")
+```
+
+
+```{r}
+find_student <- function(name) {
+  paste0("SELECT * FROM Students WHERE name = ('", name, "');")
+}
+find_student("Hadley")
+```
+
+```{r}
+find_student("Robert'); DROP TABLE Students; --")
+```
+
+```{r}
+con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+find_student <- function(name) {
+  glue::glue_sql("SELECT * FROM Students WHERE name = ({name});", .con = con)
+}
+find_student("Robert'); DROP TABLE Students; --")
+```
+

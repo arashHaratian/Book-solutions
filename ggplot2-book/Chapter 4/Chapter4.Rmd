@@ -1,0 +1,180 @@
+---
+title: "Chapter4 - Collective geoms"
+output: html_notebook
+---
+
+```{r}
+library(ggplot2)
+
+data(Oxboys, package = "nlme")
+head(Oxboys)
+```
+
+grouping happens to a discrete variable in the plot, otherwise you should pass the grouping variable.
+
+# 4.1 Multiple groups, one aesthetic
+
+the growth trajectory for each subject:
+
+```{r}
+ggplot(Oxboys, aes(age, height, group = Subject)) + 
+  geom_point() + 
+  geom_line()
+```
+
+wrong grouping:
+
+```{r}
+ggplot(Oxboys, aes(age, height)) + 
+  geom_point() + 
+  geom_line()
+```
+
+
+# 4.2 Different groups on different layers
+
+Grouping controls both the display of the geoms, and the operation of the stats: one statistical transformation is run for each group.
+
+```{r}
+ggplot(Oxboys, aes(age, height, group = Subject)) + 
+  geom_line() + 
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+
+```{r}
+ggplot(Oxboys, aes(age, height)) + 
+  geom_line(aes(group = Subject)) + 
+  geom_smooth(method = "lm", size = 2, se = FALSE)
+```
+
+
+# 4.3 Overriding the default grouping
+
+```{r}
+ggplot(Oxboys, aes(Occasion, height)) + 
+  geom_boxplot()
+```
+
+```{r}
+ggplot(Oxboys, aes(Occasion, height)) + 
+  geom_boxplot() + 
+  geom_line(colour = "#3366FF", alpha = 0.5)
+```
+
+```{r}
+ggplot(Oxboys, aes(Occasion, height)) + 
+  geom_boxplot() +
+  geom_line(aes(group = Subject), colour = "#3366FF", alpha = 0.5)
+```
+
+# 4.4 Matching aesthetics to graphic objects
+
+```{r}
+df <- data.frame(x = 1:3, y = 1:3, colour = c(1,3,5))
+
+ggplot(df, aes(x, y, colour = factor(colour))) + 
+  geom_line(aes(group = 1), size = 2) +
+  geom_point(size = 5)
+
+ggplot(df, aes(x, y, colour = colour)) + 
+  geom_line(aes(group = 1), size = 2) +
+  geom_point(size = 5)
+```
+
+```{r}
+xgrid <- with(df, seq(min(x), max(x), length = 50))
+interp <- data.frame(
+  x = xgrid,
+  y = approx(df$x, df$y, xout = xgrid)$y,
+  colour = approx(df$x, df$colour, xout = xgrid)$y  
+)
+ggplot(interp, aes(x, y, colour = colour)) + 
+  geom_line(size = 2) +
+  geom_point(data = df, size = 5)
+```
+
+
+for categorical variable:
+```{r}
+ggplot(mpg, aes(class)) + 
+  geom_bar()
+ggplot(mpg, aes(class, fill = drv)) + 
+  geom_bar()
+```
+
+for continuous variable:
+```{r}
+ggplot(mpg, aes(class, fill = hwy)) + 
+  geom_bar()
+ggplot(mpg, aes(class, fill = hwy, group = hwy)) + 
+  geom_bar()
+```
+
+# 4.5 Exercises
+
+### question 1
+
+```{r}
+ggplot(mpg, aes(cyl, hwy, group = cyl)) +
+  geom_boxplot()
+```
+
+### question 2
+
+```{r}
+ggplot(mpg, aes(displ, cty, group = displ)) + 
+  geom_boxplot()
+```
+
+### question 3
+
+first lets remove the `group` from `aes`:
+```{r}
+df <- data.frame(x = 1:3, y = 1:3, colour = c(1, 3, 5))
+
+ggplot(df, aes(x, y, colour = factor(colour))) + 
+  geom_line(size = 2) +
+  geom_point(size = 5)
+
+ggplot(df, aes(x, y, colour = colour)) + 
+  geom_line(size = 2) +
+  geom_point(size = 5)
+```
+
+now lets change the value of the `group` to 2 :
+```{r}
+df <- data.frame(x = 1:3, y = 1:3, colour = c(1, 3, 5))
+
+ggplot(df, aes(x, y, colour = factor(colour))) + 
+  geom_line(aes(group = 2), size = 2) +
+  geom_point(size = 5)
+
+ggplot(df, aes(x, y, colour = colour)) + 
+  geom_line(aes(group = 2), size = 2) +
+  geom_point(size = 5)
+```
+
+### question 4
+
+```{r}
+ggplot(mpg, aes(drv)) + 
+  geom_bar(color = "white")
+
+ggplot(mpg, aes(drv, fill = hwy, group = hwy)) + 
+  geom_bar(color = "white")
+
+library(dplyr)  
+mpg2 <- mpg %>% arrange(hwy) %>% mutate(id = seq_along(hwy)) 
+ggplot(mpg2, aes(drv, fill = hwy, group = id)) + 
+  geom_bar(color = "white")
+```
+
+### question 5
+
+```{r}
+library(babynames)
+hadley <- dplyr::filter(babynames, name == "Hadley")
+ggplot(hadley, aes(year, n)) + 
+  geom_line(aes(group = sex))
+```

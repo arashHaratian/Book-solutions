@@ -1,0 +1,186 @@
+---
+title: "Chapter17 - Faceting"
+output: html_notebook
+---
+
+```{r}
+mpg2 <- subset(mpg, cyl != 5 & drv %in% c("4", "f") & class != "2seater")
+```
+
+# 17.1 Facet wrap
+
+```{r}
+base <- ggplot(mpg2, aes(displ, hwy)) + 
+  geom_blank() + 
+  xlab(NULL) + 
+  ylab(NULL)
+
+base + facet_wrap(~class, ncol = 3)
+base + facet_wrap(~class, ncol = 3, as.table = FALSE)
+```
+
+```{r}
+base + facet_wrap(~class, nrow = 3)
+base + facet_wrap(~class, nrow = 3, dir = "v")
+```
+
+# 17.2 Facet grid
+
+```{r}
+base + facet_grid(. ~ cyl)
+```
+
+```{r}
+base + facet_grid(drv ~ .)
+```
+
+```{r}
+base + facet_grid(drv ~ cyl)
+```
+
+You can use multiple variables in the rows or columns, by “adding” them together, e.g. `a + b ~ c + d`.
+
+# 17.3 Controlling scales
+
+```{r}
+p <- ggplot(mpg2, aes(cty, hwy)) + 
+  geom_abline() +
+  geom_jitter(width = 0.1, height = 0.1) 
+p + facet_wrap(~cyl)
+```
+
+```{r}
+p + facet_wrap(~cyl, scales = "free")
+```
+
+
+
+```{r}
+economics_long
+
+ggplot(economics_long, aes(date, value)) + 
+  geom_line() + 
+  facet_wrap(~variable, scales = "free_y", ncol = 1)
+```
+
+```{r}
+mpg2$model <- reorder(mpg2$model, mpg2$cty)
+mpg2$manufacturer <- reorder(mpg2$manufacturer, -mpg2$cty)
+ggplot(mpg2, aes(cty, model)) + 
+  geom_point() + 
+  facet_grid(manufacturer ~ ., scales = "free", space = "free") +
+  theme(strip.text.y = element_text(angle = 0))
+```
+
+# 17.4 Missing faceting variables
+
+```{r}
+df1 <- data.frame(x = 1:3, y = 1:3, gender = c("f", "f", "m"))
+df2 <- data.frame(x = 2, y = 2)
+
+ggplot(df1, aes(x, y)) + 
+  geom_point(data = df2, colour = "red", size = 2) + 
+  geom_point() + 
+  facet_wrap(~gender)
+```
+
+# 17.5 Grouping vs. faceting
+
+```{r}
+df <- data.frame(
+  x = rnorm(120, c(0, 2, 4)),
+  y = rnorm(120, c(1, 2, 1)),
+  z = letters[1:3]
+)
+
+ggplot(df, aes(x, y)) + 
+  geom_point(aes(colour = z))
+```
+
+```{r}
+ggplot(df, aes(x, y)) + 
+  geom_point() + 
+  facet_wrap(~z)
+```
+
+```{r}
+df_sum <- df %>% 
+  group_by(z) %>% 
+  summarise(x = mean(x), y = mean(y)) %>%
+  rename(z2 = z)
+#> `summarise()` ungrouping output (override with `.groups` argument)
+ggplot(df, aes(x, y)) + 
+  geom_point() + 
+  geom_point(data = df_sum, aes(colour = z2), size = 4) + 
+  facet_wrap(~z)
+```
+
+
+
+```{r}
+df2 <- dplyr::select(df, -z)
+
+ggplot(df, aes(x, y)) + 
+  geom_point(data = df2, colour = "grey70") +
+  geom_point(aes(colour = z)) + 
+  facet_wrap(~z)
+```
+
+# 17.6 Continuous variables
+
+```{r}
+# Bins of width 1
+mpg2$disp_w <- cut_width(mpg2$displ, 1)
+# Six bins of equal length
+mpg2$disp_i <- cut_interval(mpg2$displ, 6)
+# Six bins containing equal numbers of points
+mpg2$disp_n <- cut_number(mpg2$displ, 6)
+
+plot <- ggplot(mpg2, aes(cty, hwy)) +
+  geom_point() +
+  labs(x = NULL, y = NULL)
+plot + facet_wrap(~disp_w, nrow = 1)
+
+plot + facet_wrap(~disp_i, nrow = 1)
+
+plot + facet_wrap(~disp_n, nrow = 1)
+```
+
+# 17.7 Exercises
+
+### question 1
+```{r}
+base_cut <- ggplot(diamonds)
+base_cut
+base_cut + geom_histogram(aes(x = price, fill = cut), position = "dodge")
+base_carat <- ggplot(diamonds, aes(carat, price))
+base_carat + geom_point()
+```
+
+```{r}
+base_carat + geom_point(aes(color = carat)) +
+  facet_wrap(~ cut, scales = "free")
+```
+
+```{r}
+diamonds2 <- diamonds
+diamonds2$carat_i <- cut_interval(diamonds$carat, 10)
+  
+ggplot(diamonds, aes(cut, price)) +
+  geom_boxplot(aes(color = cut)) +
+  coord_flip() +
+  facet_wrap(~ diamonds2$carat_i)
+```
+
+
+
+### question 2
+
+```{r}
+mpg3 <- mpg2 %>% select(-class)
+ggplot(mpg2, aes(displ, hwy)) +
+  geom_point() +
+  geom_smooth(data = mpg3, se = FALSE) +
+  facet_wrap(~class)
+```
+

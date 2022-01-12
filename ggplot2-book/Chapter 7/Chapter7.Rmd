@@ -1,0 +1,184 @@
+---
+title: "Chapter7 - Networks"
+output: html_notebook
+---
+
+# 7.1 What is network data?
+
+## 7.1.1 A tidy network manipulation API
+
+```{r}
+library(tidygraph)
+
+graph <- play_erdos_renyi(n = 10, p = 0.2) %>% 
+  activate(nodes) %>% 
+  mutate(class = sample(letters[1:4], n(), replace = TRUE)) %>% 
+  activate(edges) %>% 
+  arrange(.N()$class[from])
+
+graph
+```
+
+## 7.1.2 Conversion
+
+```{r}
+data(highschool, package = "ggraph")
+head(highschool)
+```
+
+```{r}
+hs_graph <- as_tbl_graph(highschool, directed = FALSE)
+hs_graph
+```
+
+```{r}
+luv_clust <- hclust(dist(luv_colours[, 1:3]))
+luv_graph <- as_tbl_graph(luv_clust)
+luv_graph
+```
+
+## 7.1.3 Algorithms
+
+```{r}
+graph %>% 
+  activate(nodes) %>% 
+  mutate(centrality = centrality_pagerank()) %>% 
+  arrange(desc(centrality))
+```
+
+# 7.2 Visualizing networks
+
+## 7.2.1 Setting up the visualization
+### 7.2.1.1 Specifying a layout
+
+```{r}
+library(ggraph)
+ggraph(hs_graph) + 
+  geom_edge_link() + 
+  geom_node_point()
+```
+
+```{r}
+ggraph(hs_graph, layout = "drl") + 
+  geom_edge_link() + 
+  geom_node_point()
+```
+
+```{r}
+hs_graph <- hs_graph %>% 
+  activate(edges) %>% 
+  mutate(edge_weights = runif(n()))
+ggraph(hs_graph, layout = "stress", weights = edge_weights) + 
+  geom_edge_link(aes(alpha = edge_weights)) + 
+  geom_node_point() + 
+  scale_edge_alpha_identity()
+```
+
+### 7.2.1.2 Circularity
+
+```{r}
+ggraph(luv_graph, layout = 'dendrogram', circular = TRUE) + 
+  geom_edge_link() + 
+  coord_fixed()
+```
+
+```{r}
+ggraph(luv_graph, layout = 'dendrogram') + 
+  geom_edge_link() + 
+  coord_polar() + 
+  scale_y_reverse()
+```
+
+## 7.2.2 Drawing nodes
+
+```{r}
+ggraph(hs_graph, layout = "stress") + 
+  geom_edge_link() + 
+  geom_node_point(
+    aes(filter = centrality_degree() > 2, 
+        colour = centrality_power()),
+    size = 4
+  )
+```
+
+```{r}
+ggraph(luv_graph, layout = "treemap") + 
+  geom_node_tile(aes(fill = depth))
+```
+
+## 7.2.3 Drawing edges
+
+```{r}
+ggraph(graph, layout = "stress") + 
+  geom_edge_link(aes(alpha = after_stat(index)))
+```
+
+```{r}
+ggraph(graph, layout = "stress") + 
+  geom_edge_link2(
+    aes(colour = node.class), 
+    width = 3,
+    lineend = "round")
+```
+
+```{r}
+ggraph(hs_graph, layout = "stress") + 
+  geom_edge_fan()
+```
+```{r}
+ggraph(hs_graph, layout = "stress") + 
+  geom_edge_parallel()
+```
+
+```{r}
+ggraph(luv_graph, layout = "dendrogram", height = height) + 
+  geom_edge_elbow()
+```
+
+```{r}
+ggraph(luv_graph, layout = "dendrogram", height = height) +
+  geom_edge_bend()
+ggraph(luv_graph, layout = "dendrogram", height = height) +
+  geom_edge_diagonal()
+```
+
+### 7.2.3.1 Clipping edges around the nodes
+```{r}
+ggraph(graph, layout = "stress") + 
+  geom_edge_link(arrow = arrow()) + 
+  geom_node_point(aes(colour = class), size = 8)
+```
+
+```{r}
+ggraph(graph, layout = "stress") + 
+  geom_edge_link(
+    arrow = arrow(), 
+    start_cap = circle(5, "mm"),
+    end_cap = circle(5, "mm")
+  ) + 
+  geom_node_point(aes(colour = class), size = 8)
+```
+
+### 7.2.3.2 An edge is not always a line
+
+```{r}
+ggraph(hs_graph, layout = "matrix", sort.by = node_rank_traveller()) + 
+  geom_edge_point()
+```
+
+## 7.2.4 Faceting
+
+```{r}
+ggraph(hs_graph, layout = "stress") + 
+  geom_edge_link() + 
+  geom_node_point() + 
+  facet_edges(~year)
+```
+
+```{r}
+ggraph(hs_graph, layout = "stress") + 
+  geom_edge_link() + 
+  geom_node_point() + 
+  facet_nodes(~ group_spinglass())
+```
+

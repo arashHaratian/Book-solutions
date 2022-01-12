@@ -1,0 +1,358 @@
+---
+title: "Chapter21 - Testing"
+output: html_notebook
+---
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+library(testthat)
+library(shinytest)
+```
+
+```{r}
+test_that("as.vector() strips names", {
+  x <- c(a = 1, b = 2)
+  expect_equal(as.vector(x), c(1, 2))
+})
+```
+
+
+
+# 21.1 Testing functions
+
+## 21.1.2 Basic workflow
+
+```{r}
+file.edit("R/load.R")
+file.edit("tests/testthat/test-load.R")
+```
+
+
+## 21.1.3 Key expectations
+
+do not check the hole object, it’s better to test just the component that you’re interested in:
+
+```{r}
+complicated_object <- list(
+  x = list(mtcars, iris),
+  y = 10
+)
+expect_equal(complicated_object$y, 10)
+```
+
+`expect_true(x)` and `expect_false(x)` are equivalent to `expect_equal(x, FALSE)` and e`xpect_equal(x, TRUE)`. `expect_null(x)` is equivalent to `expect_equal(x, NULL)`.
+
+`expect_named(x, c("a", "b", "c"))` is equivalent to `expect_equal(names(x), c("a", "b", "c"))`, but has options `ignore.order` and `ignore.case`. `expect_length(x, 10)` is equivalent to `expect_equal(length(x), 10)`.
+
+There are also functions that implement relaxed versions of `expect_equal()` for vectors:
+
+`expect_setequal(x, y)` tests that every value in `x` occurs in `y`, and every value in `y` occurs in `x.`
+
+`expect_mapequal(x, y)` tests that x and y have the same names and that `x[names(y)]` equals `y`.
+
+
+
+```{r}
+expect_error("Hi!")
+expect_error(stop("Bye"))
+expect_error(stop(Bye))
+```
+
+```{r}
+expect_error(
+  stop("Calculation failed [location 1]"), 
+  "Calculation failed [location 1]"
+)
+```
+```{r}
+expect_error(
+  stop("Calculation failed [location 1]"), 
+  "Calculation failed \\[location 1\\]"
+)
+expect_error(
+  stop("Calculation failed [location 1]"), 
+  "Calculation failed"
+)
+```
+
+
+## 21.1.4 User interface functions
+
+```{r}
+sliderInput01 <- function(id) {
+  sliderInput(id, label = id, min = 0, max = 1, value = 0.5, step = 0.1)
+}
+
+cat(as.character(sliderInput01("x")))
+```
+
+```{r}
+test_that("shinyInput01() creates expected HTML", {
+  expect_equal(sliderInput("x"), "<div class=\"form-group shiny-input-container\">\n  <label class=\"control-label\" for=\"x\">x</label>\n  <input class=\"js-range-slider\" id=\"x\" data-min=\"0\" data-max=\"1\" data-from=\"0.5\" data-step=\"0.1\" data-grid=\"true\" data-grid-num=\"10\" data-grid-snap=\"false\" data-prettify-separator=\",\" data-prettify-enabled=\"true\" data-keyboard=\"true\" data-data-type=\"number\"/>\n</div>")
+})
+```
+
+```{r}
+test_that("shinyInput01() creates expected HTML", {
+  expect_snapshot_output(sliderInput01("x"))
+})
+```
+
+
+# 21.3 Testing reactivity
+
+```{r}
+ui <- fluidPage(
+  numericInput("x", "x", 0),
+  numericInput("y", "y", 1),
+  numericInput("z", "z", 2),
+  textOutput("out")
+)
+server <- function(input, output, session) {
+  xy <- reactive(input$x - input$y)
+  yz <- reactive(input$z + input$y)
+  xyz <- reactive(xy() * yz())
+  output$out <- renderText(paste0("Result: ", xyz()))
+}
+```
+
+To test this code we’ll use the `testServer()`.
+
+```{r}
+testServer(server, {
+  session$setInputs(x = 1, y = 1, z = 1)
+  print(xy())
+  print(output$out)
+})
+```
+
+
+```{r}
+testServer(server, browser())
+```
+```{r}
+testServer(server, {
+  print(input$x)
+})
+```
+
+
+```{r}
+test_that("reactives and output updates", {
+  testServer(server, {
+    session$setInputs(x = 1, y = 1, z = 1)
+    expect_equal(xy(), 0)
+    expect_equal(yz(), 2)
+    expect_equal(output$out, "Result: 0")
+  })
+})
+```
+
+## 21.3.1 Modules
+
+
+```{r}
+summaryUI <- function(id) {
+  tagList(
+    outputText(ns(id, "min")),
+    outputText(ns(id, "mean")),
+    outputText(ns(id, "max")),
+  )
+}
+summaryServer <- function(id, var) {
+  stopifnot(is.reactive(var))
+  
+  moduleServer(id, function(input, output, session) {
+    range_val <- reactive(range(var(), na.rm = TRUE))
+    output$min <- renderText(range_val()[[1]])
+    output$max <- renderText(range_val()[[2]])
+    output$mean <- renderText(mean(var()))
+  })
+}
+```
+
+
+```{r}
+x <- reactiveVal(1:10)
+testServer(summaryServer, args = list(var = x), {
+  print(range_val())
+  print(output$min)
+})
+```
+
+
+
+```{r}
+test_that("output updates when reactive input changes", {
+  x <- reactiveVal()
+  testServer(summaryServer, args = list(var = x), {
+    x(1:10)
+    expect_equal(range_val(), c(1, 10))
+    expect_equal(output$mean, "5.5")
+    
+    x(10:20)
+    expect_equal(range_val(), c(10, 20))
+    # expect_equal(output$min, "10")
+  }) 
+})
+```
+
+If your module has a return value (a reactive or list of reactives), you can capture it with s`ession$getReturned()`. Then you can check the value of that reactive, just like any other reactive.
+
+
+```{r}
+datasetServer <- function(id) {
+  moduleServer(id, function(input, output, session) {
+    reactive(get(input$dataset, "package:datasets"))
+  })
+}
+
+test_that("can find dataset", {
+  testServer(datasetServer, {
+    dataset <- session$getReturned()
+    
+    session$setInputs(dataset = "mtcars")
+    expect_equal(dataset(), mtcars)
+    
+    session$setInputs(dataset = "iris")
+    expect_equal(dataset(), iris)
+  })
+})
+```
+
+## 21.3.2 Limitations
+`testServer()` ignores UI. That means inputs don’t get default values, and no JavaScript works. Most importantly this means that you can’t test the `update*` functions, because they work by sending JavaScript to the browser to simulates user interactions. You’ll require the next technique to test such code.
+
+# 21.4 Testing JavaScript
+
+## 21.4.1 Basic operation
+
+```{r}
+
+```
+
+
+```{r}
+# app <- shinytest::ShinyDriver$new(shinyApp(ui, server))
+app <- shinytest::ShinyDriver$new(path = ".")
+app$setInputs(name = "Arash")
+app$getValue("greeting")
+# app$click("reset")
+app$setInputs(reset = "click")
+
+app$getValue("greeting")
+```
+
+
+```{r}
+test_that("can set and reset name", {
+  app <- shinytest::ShinyDriver$new(path = ".")
+  app$setInputs(name = "Arash")
+  app$getValue("greeting")
+  expect_equal(app$getValue("greeting"), "Hi Arash")
+  
+  app$setInputs(reset = "click")
+  expect_equal(app$getValue("greeting"), "")
+})
+```
+
+## 21.4.2 Case study
+
+
+```{r}
+ui <- fluidPage(
+  radioButtons("fruit", "What's your favourite fruit?",
+    choiceNames = list(
+      "apple", 
+      "pear", 
+      textInput("other", label = NULL, placeholder = "Other")
+    ),
+    choiceValues = c("apple", "pear", "other")
+  ), 
+  textOutput("value")
+)
+
+server <- function(input, output, session) {
+  observeEvent(input$other, ignoreInit = TRUE, {
+    updateRadioButtons(session, "fruit", selected = "other")
+  })
+    
+  output$value <- renderText({
+    if (input$fruit == "other") {
+      req(input$other)
+      input$other
+    } else {
+      input$fruit
+    }
+  })
+}
+shinyApp(ui, server)
+```
+
+
+```{r}
+test_that("returns other value when primary is other", {
+  testServer(server, {
+    session$setInputs(fruit = "apple")
+    expect_equal(output$value, "apple")
+    
+    session$setInputs(fruit = "other", other = "orange")
+    expect_equal(output$value, "orange")
+  })  
+})
+
+```
+
+```{r}
+test_that("returns other value when primary is other", {
+  testServer(server, {
+    session$setInputs(fruit = "apple", other = "orange")
+    expect_equal(output$value, "orange")
+  })  
+})
+```
+
+
+```{r}
+test_that("automatically switches to other", {
+  app <- ShinyDriver$new(shinyApp(ui, server))
+  app$setInputs(other = "orange")
+  expect_equal(app$getValue("fruit"), "other")
+  expect_equal(app$getValue("value"), "orange")
+})
+```
+
+Generally, you are best off using `testServer()` as much as possible, and only using `ShinyDriver` for the bits that need a real browser.
+
+# 21.5 Testing visuals
+
+```{r}
+path <- tempfile()
+app <- ShinyDriver$new(shinyApp(ui, server))
+
+# Save screenshot to temporary file
+app$takeScreenshot(path, "plot")
+# 
+expect_snapshot_file(path, "plot-init.png")
+
+app$setValue(x = 2)
+app$takeScreenshot(path, "plot")
+expect_snapshot_file(path, "plot-update.png")
+```
+
+
+# 21.6 Philosophy
+
+
+Before you write the code. This is a style of code called test driven development, and if you know exactly how a function should behave, it makes sense to capture that knowledge as code before you start writing the implementation.
+
+After you write the code. While writing code you’ll often build up a mental to-do list of worries about your code. After you’ve written the function, turn these into tests so that you can be confident that the function works the way that you expect.
+
+When you start writing tests, beware writing them too soon. If your function is still actively evolving, keeping your tests up to date with all the changes is going to feel frustrating. That may indicate you need to wait a little longer.
+
+When you find a bug. Whenever you find a bug, it’s good practice to turn it into an automated test case. This has two advantages. Firstly, to make a good test case, you’ll need to relentlessly simplify the problem until you have a very minimal reprex that you can include in a test. Secondly, you’ll make sure that the bug never comes back again!

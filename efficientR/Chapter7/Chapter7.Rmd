@@ -1,0 +1,387 @@
+---
+title: "Chapter7 - Efficient optimisation"
+output: html_notebook
+---
+
+```{r}
+library("microbenchmark")
+library("ggplot2movies")
+library("profvis")
+library("Rcpp")
+library(efficient)
+```
+
+# 7.2 Code profiling
+
+```{r}
+profvis({
+  data(movies, package = "ggplot2movies") # Load data
+  movies <- movies[movies$Comedy == 1,]
+  plot(movies$year, movies$rating)
+  model <- loess(rating ~ year, data = movies) # loess regression line
+  j <- order(movies$year)
+  lines(movies$year[j], model$fitted[j]) # Add line to the plot
+})
+```
+
+
+```{r}
+library("efficient")
+profvis(simulate_monopoly(10000))
+```
+
+# 7.3 Efficient base R
+
+```{r}
+marks<- runif(n = 10e6, min = 30, max = 99)
+system.time({
+  result1 <- ifelse(marks >= 40, "pass", "fail")
+})
+
+system.time({
+  result2 <- rep("fail", length(marks)) 
+  result2[marks >= 40] = "pass"
+})
+
+identical(result1, result2)
+```
+
+```{r}
+system.time({
+  result3 <- dplyr::if_else(marks >= 40, "pass", "fail")
+})
+
+identical(result1, result3)
+```
+
+## Matrices
+```{r}
+data(ex_mat, ex_df, package="efficient")
+microbenchmark(times=100, unit="ms", ex_mat[1,], ex_df[1,])
+```
+
+> Use the `data.matrix()` function to efficiently convert a data frame into a matrix.
+
+## The integer data type
+
+```{r}
+x <- runif(10)
+microbenchmark(head(x, 6.0), head(x, 6L), times=1000000)
+```
+
+
+```{r}
+pryr::object_size(1:10000)
+pryr::object_size(y = seq(1, 10000, by=1.0))
+```
+
+```{r}
+is.integer(1L + 1)
+```
+
+## Sparse matrices
+
+```{r}
+library("Matrix")
+N = 10000
+sp <- sparseMatrix(1:N, 1:N, x = 1)
+m <- diag(1, N, N)
+```
+
+```{r}
+pryr::object_size(sp)
+pryr::object_size(m)
+```
+
+## Exercises
+
+### q1
+```{r}
+x <- 1:10
+x[2] <- NA
+
+microbenchmark(any(is.na(x)), anyNA(x), times = 100000)
+
+
+microbenchmark(any(is.na(x)), anyNA(x))
+
+x <- 1:1000
+x[2] <- NA
+microbenchmark(any(is.na(x)), anyNA(x))
+
+x <- 1:1000
+x[800] <- NA
+microbenchmark(any(is.na(x)), anyNA(x))
+```
+
+### q2
+
+```{r}
+tail.matrix
+```
+
+### q3
+
+```{r}
+matrix_int <- matrix(sample(1:100000), 20)
+matrix_num <- as.numeric(matrix_int)
+
+pryr::object_size(matrix_int)
+pryr::object_size(matrix_num)
+```
+
+### q4
+
+`seq()` is a generic function and `seq.int()` is a method of `seq()`:
+```{r}
+seq.int
+seq
+```
+
+# 7.5 Parallel computing
+
+```{r}
+library("parallel")
+no_of_cores <- detectCores()
+```
+
+## 7.5.1 Parallel versions of apply functions
+
+```{r}
+parLapply
+parApply
+parSapply
+```
+
+## 7.5.2 Example: Snakes and Ladders
+
+```{r}
+N <- 10^4
+sapply(1:N, snakes_ladders)
+```
+
+```{r}
+cl <- makeCluster(4)
+```
+
+```{r}
+parSapply(cl, 1:N, snakes_ladders)
+```
+
+```{r}
+stopCluster(cl)
+```
+
+
+## 7.5.3 Exit functions with care
+
+```{r, eval = FALSE}
+simulate <- function(cores) {
+  cl <- makeCluster(cores)
+  on.exit(stopCluster(cl))
+  # Do something  
+}
+```
+
+# 7.6 Rcpp
+## 7.6.1 A simple C++ function
+
+```{r}
+add_r <- function(x, y) x + y
+```
+
+```{cpp}
+/* Return type double
+ * Two arguments, also doubles
+ */
+double add_cpp(double x, double y) { 
+  double value = x + y;
+  return value;
+}
+```
+
+## 7.6.2 The cppFunction() command
+
+```{r}
+cppFunction('
+  double add_cpp(double x, double y) {
+    double value = x + y;
+    return value;
+  }
+')
+
+add_cpp
+```
+
+```{r}
+add_cpp(1, 2)
+```
+
+## 7.6.4 The sourceCpp() function
+
+
+```{r}
+file.edit("add.cpp")
+```
+
+```{r}
+sourceCpp("add.cpp")
+```
+
+
+## 7.6.5 Vectors and loops
+
+```{r}
+mean_r <- function(x) {
+  m <- 0
+  n <- length(x)
+  for(i in 1:n)
+    m <- m + x[i] / n
+  m
+}
+```
+
+```{r}
+file.edit("mean.cpp")
+```
+
+```{r}
+sourceCpp("mean.cpp")
+```
+
+```{r}
+com_mean_r <- compiler::cmpfun(mean_r)
+x <- rnorm(10000)
+result <- microbenchmark(mean(x), mean_r(x), com_mean_r(x), mean_cpp(x), times = 1000)
+```
+
+```{r}
+plot(result)
+result
+```
+
+### Exercises
+
+#### q1
+```{r}
+file.edit("test1.cpp")
+```
+
+```{r}
+sourceCpp("test1.cpp")
+```
+
+```{r}
+test1_cpp()
+```
+
+#### q2
+
+```{r}
+ test1_r <- function() {
+  a <- 1 / 81
+  b <- 0
+  for (i in 1:729)
+    b = b + a
+  return(b)
+ }
+
+test1_r()
+```
+
+```{r}
+test1_r_com <- compiler::cmpfun(test1_r)
+microbenchmark(test1_r(), test1_r_com(), test1_cpp(), times = 1000)
+```
+
+#### q3
+```{r}
+file.edit("test2.cpp")
+```
+
+```{r}
+sourceCpp("test2.cpp")
+```
+
+```{r}
+test2_cpp()
+```
+
+#### q5
+
+there is no differnece in for loop but , `++i` first increase the value of the `i` and then use its value but `i++` use its value then increase the value.
+
+```{r}
+cppFunction('
+int prefix() {
+  int i = 0;
+  for (i = 0; i <= 3; ++i)
+     Rcout << i<< std::endl;
+  return i;
+}
+')
+```
+
+```{r}
+prefix()
+```
+
+
+
+```{r}
+cppFunction('
+int suffix() {
+  int i = 0;
+  for (i = 0; i <= 3; i++)
+     Rcout << i<< std::endl;
+  return i;
+}
+')
+```
+
+```{r}
+suffix()
+```
+
+
+## Matrices
+
+
+```{cpp}
+// 10 rows, 5 columns
+NumericMatrix mat(10, 5);
+// Length 10
+NumericVector v(10);
+
+// subseting
+mat(5, 4)
+```
+
+## 7.6.6 C++ with sugar on top
+
+```{r}
+sq_diff_r <- function(x, y) (x - y)^2
+```
+
+```{Rcpp ,eval=FALSE}
+NumericVector res_c(NumericVector x, NumericVector y) {
+  int i;
+  int n = x.size();
+  NumericVector residuals(n);
+  for(i = 0; i < n; i++) {
+    residuals[i] = pow(x[i] - y[i], 2);
+  }
+  return residuals;
+}
+```
+
+
+
+Rcpp suger:
+
+```{Rcpp, eval=FALSE}
+NumericVector res_sugar(NumericVector x, NumericVector y) {
+  return pow(x - y, 2);
+}
+```
+

@@ -1,0 +1,354 @@
+---
+title: "Chapter3 - Efficient programming"
+output: html_notebook
+---
+
+```{r}
+library("compiler")
+library("memoise")
+```
+
+# 3.1 Top 5 tips for efficient programming
+
+1- Be careful never to grow vectors.
+2- Vectorise code whenever possible.
+3- Use factors when appropriate.
+4- Avoid unnecessary computation by caching variables.
+5- Byte compile packages for an easy performance boost.
+
+# 3.2 General advice
+
+```{r}
+runif
+```
+
+> A **golden rule** in R programming is to access the underlying C/Fortran routines as quickly as possible; the fewer functions calls required to achieve this, the better.
+
+## Exercise
+
+```{r}
+x <- 1:100
+microbenchmark::microbenchmark(
+  {y <- x + 1},
+  {
+   for(i in seq_along(x))
+     x[i] = x[i] + 1
+  }
+)
+```
+
+## 3.2.1 Memory allocation
+
+
+>  A good rule of thumb is to compare your objects before and after a for loop; have they increased in length?
+
+## 3.2.2 Vectorised code
+
+```{r}
+log_sum <- 0
+for (i in 1:length(x))
+  log_sum <- log_sum + log(x[i])
+
+# vs
+
+log_sum <- sum(log(x))
+```
+
+### Exercises
+
+
+#### q1
+
+```{r}
+x <- 1:1000
+microbenchmark::microbenchmark(
+  {
+    log_sum <- 0
+    for (i in 1:length(x))
+      log_sum <- log_sum + log(x[i])
+  },
+  {log_sum <- sum(log(x))}
+)
+```
+
+
+#### q2
+
+```{r}
+x <- vector()
+
+log_sum <- 0
+for (i in 1:length(x))
+  log_sum <- log_sum + log(x[i])
+log_sum
+
+# vs
+
+log_sum <- sum(log(x))
+log_sum
+```
+
+### Example: Monte-Carlo integration
+
+
+
+```{r}
+monte_carlo <- function(N) {
+  hits = 0
+  for (i in seq_len(N)) {
+    u1 <- runif(1)
+    u2 <- runif(1)
+    if (u1 ^ 2 > u2)
+      hits <- hits + 1
+  }
+  return(hits / N)
+}
+```
+
+```{r}
+N <- 500000
+system.time(monte_carlo(N))
+```
+
+
+
+```{r}
+monte_carlo_vec <- function(N) sum(runif(N)^2 > runif(N)) / N
+```
+
+
+### Exercise
+
+```{r}
+n = 1000
+microbenchmark::microbenchmark(monte_carlo_vec(n), monte_carlo(n))
+
+n = 10000
+microbenchmark::microbenchmark(monte_carlo_vec(n), monte_carlo(n))
+
+n = 100000
+microbenchmark::microbenchmark(monte_carlo_vec(n), monte_carlo(n))
+```
+
+# 3.3 Communicating with the user
+
+## Fatal errors: stop()
+
+
+```{r}
+# Suppress the error message
+good <- try(1 + 1, silent = TRUE)
+bad <-try(1 + "1", silent = TRUE)
+```
+
+
+```{r}
+good
+```
+
+```{r}
+bad
+```
+
+
+### Exercises
+```{r}
+f <- function(call = FALSE)
+    stop("An error has occured", call. = call)
+
+f(T)
+```
+
+```{r}
+f(F)
+```
+
+## 3.3.1 Invisible returns
+
+
+```{r}
+x <- rnorm(1000)
+hist(x)
+
+out <- hist(x)
+out
+```
+
+# 3.4 Factors
+
+## 3.4.2 Fixed set of categories
+
+```{r}
+m <- c("January", "December", "March")
+m
+```
+
+```{r}
+# month.name contains the 12 months
+fac_m <- factor(m, levels = month.name)
+sort(fac_m)
+```
+
+### Exercise
+
+```{r}
+fct_letters <- factor(letters)
+letters <- letters
+pryr::object_size(fct_letters)
+pryr::object_size(letters)
+```
+
+
+
+```{r}
+ch <- sample(month.name, 1e6, replace = TRUE)
+fac <- factor(ch, levels = month.name)
+pryr::object_size(ch)
+pryr::object_size(fac)
+```
+
+# 3.5 The apply family
+
+```{r}
+data("ex_mat", package = "efficient")
+row_sd <- apply(ex_mat, 1, sd)
+row_sd
+```
+
+```{r}
+col_sd <- apply(ex_mat, 2, sd)
+```
+
+```{r}
+row_sd <- apply(ex_mat, 1, sd, na.rm = TRUE)
+```
+
+
+## 3.5.1 Example: the movies data set
+
+```{r}
+data(movies, package = "ggplot2movies")
+```
+
+```{r}
+ratings <- movies[, 7:16]
+ratings[1,  ]
+```
+
+```{r}
+popular <- apply(ratings, 1, nnet::which.is.max)
+plot(table(popular))
+```
+
+## 3.5.2 Type consistency
+
+```{r}
+two_cols <- data.frame(x = 1:5, y = letters[1:5])
+zero_cols <- data.frame()
+sapply(two_cols, class)  # a character vector
+sapply(zero_cols, class) # a list
+two_cols[, 1:2]          # a data.frame
+two_cols[, 1]            # an integer vector
+```
+
+### Exercises
+
+#### q1
+```{r}
+two_cols <- data.frame(x = 1:5, y = letters[1:5])
+zero_cols <- data.frame()
+vapply(two_cols, class, FUN.VALUE = "character") # a list
+vapply(zero_cols, class, FUN.VALUE = "character") # a list
+```
+
+#### q2
+```{r}
+mtcars[, 1, drop=FALSE]
+```
+
+
+# 3.6 Caching variables
+
+```{r}
+# Argument indicates row to remove
+plot_mpg <- function(row_to_remove) {
+  data(mpg, package = "ggplot2")
+  mpg <- mpg[-row_to_remove, ]
+  plot(mpg$cty, mpg$hwy)
+  lines(lowess(mpg$cty, mpg$hwy), col = 2)
+}
+
+m_plot_mpg <- memoise(plot_mpg)
+result <- microbenchmark::microbenchmark(times = 10, unit = "ms", m_plot_mpg(10), plot_mpg(10))
+result
+```
+
+## Exercise
+```{r}
+library(ggplot2)
+ggplot(result, aes(expr, time)) + geom_boxplot()
+
+
+plot(result)
+```
+
+
+
+
+## 3.6.1 Function closures
+
+
+```{r}
+stop_watch <- function() {
+  start_time <- stop_time <- NULL
+  start <- function() start_time <<- Sys.time()
+  stop <- function() {
+    stop_time <<- Sys.time()
+    difftime(stop_time, start_time)
+  }
+  list(start = start, stop = stop)
+}
+watch <- stop_watch()
+```
+
+```{r}
+watch$start()
+```
+
+```{r}
+watch$stop()
+```
+
+# 3.7 The byte compiler
+
+```{r}
+mean
+```
+
+The easiest is to compile individual functions using `cmpfun()`.
+
+## 3.7.1 Example: the mean function
+
+```{r}
+library("compiler")
+
+mean_r <- function(x) {
+  m <- 0
+  n <- length(x)
+  for (i in seq_len(n))
+    m <- m + x[i] / n
+  m
+}
+
+
+cmp_mean_r <- cmpfun(mean_r)
+```
+
+```{r}
+# Generate some data
+x = rnorm(1000)
+microbenchmark::microbenchmark(times = 10, unit = "ms", # milliseconds
+          mean_r(x), cmp_mean_r(x), mean(x))
+```
+
+

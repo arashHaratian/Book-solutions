@@ -1,0 +1,9 @@
+1- "althogh" section 2.3.1
+2- before 3.2.1 `seq_len(n)` -> `seq_along(x)`
+3- section 5.3 has an wrong variable names : `df_co2_dt <- readr`!
+4- also wrong path in section 5.3(`extdata/`)
+5- chapter5 co2 data is not avaliable even in github `data(package = "efficient")`
+6- back-quotes (\) 6.4.1     backtick
+7- check big warnings in 6.4.5 (update: some countries' gini are NA)
+8- 6.5  it's not `co2` package, it's ` ghg_ems` 
+9- `Prerequisties` chapter 10 - > `Prerequisites`

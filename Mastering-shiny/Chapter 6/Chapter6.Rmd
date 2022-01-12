@@ -1,0 +1,68 @@
+---
+title: "Chapter6 - Workflow"
+output: html_notebook
+---
+
+
+# 6.2 Debugging
+## 6.2.1 Reading tracebacks
+```{r}
+f <- function(x) g(x)
+g <- function(x) h(x)
+h <- function(x) x * 2
+```
+
+
+```{r}
+library(shiny)
+
+ui <- fluidPage(
+  selectInput("n", "N", 1:10),
+  plotOutput("plot")
+)
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    n <- f(input$n)
+    plot(head(cars, n))
+  }, res = 96)
+}
+shinyApp(ui, server)
+```
+
+to check the traceback , run the `app.R`.
+
+
+## 6.2.4 Debugging reactivity
+
+
+```{r}
+ui <- fluidPage(
+  sliderInput("x", "x", value = 1, min = 0, max = 10),
+  sliderInput("y", "y", value = 2, min = 0, max = 10),
+  sliderInput("z", "z", value = 3, min = 0, max = 10),
+  textOutput("total")
+)
+server <- function(input, output, session) {
+  observeEvent(input$x, {
+    message(glue("Updating y from {input$y} to {input$x * 2}"))
+    updateSliderInput(session, "y", value = input$x * 2)
+  })
+  
+  total <- reactive({
+    total <- input$x + input$y + input$z
+    message(glue("New total is {total}"))
+    total
+  })
+  
+  output$total <- renderText({
+    total()
+  })
+}
+shinyApp(ui, server)
+```
+
+
+
+
+
+

@@ -1,0 +1,135 @@
+---
+title: "Diamond sizes"
+output: html_document
+date: '2016-08-25'
+---
+
+
+Checking Name (and include option)
+----------------------------------------------
+```{r setup, include = FALSE}
+library(tidyverse)
+print("i will run before any other codes(becuase of my name)")
+```
+use the primary object name for chank name
+
+
+Options
+---------------------------------------------
+
+
+### eval option
+
+```{r eval = FALSE}
+test <- "eval works like commenting"
+```
+
+### echo option
+```{r echo = FALSE}
+summary(mtcars)
+```
+
+
+
+### message and warning option
+```{r message = FALSE}
+message("hello?")
+```
+
+
+```{r warning = FALSE}
+warning("bye!")
+```
+
+
+### results option
+```{r results = 'hide'}
+summary(mtcars)
+```
+
+
+
+### fig.show option
+```{r fig.show = 'hide'}
+plot(pressure)
+```
+
+
+
+### error = TRUE option
+this option good for educational purposes, because rendering won't pause even after an error
+
+
+Tables
+----------------------------------------
+this is a normal output:
+```{r}
+mtcars[1:5, ]
+```
+but if we want some formatting we need to use **knitr::kable** :
+```{r}
+knitr::kable(
+  mtcars[1:5, ], 
+  caption = "A knitr kable."
+)
+
+df <- tibble::tibble(c(T,T,F,T,F,F,F))
+knitr::kable(df)
+```
+
+
+For even deeper customisation, consider the **xtable, stargazer, pander, tables, and ascii** packages.
+
+
+
+Caching
+--------------------------
+```{r raw_data}
+rawdata <- readr::read_csv("a_very_large_file.csv")
+```
+
+```{r processed_data, cache = TRUE}
+processed_data <- rawdata %>% 
+  filter(!is.na(import_var)) %>% 
+  mutate(new_variable = complicated_transformation(x, y, z))
+```
+
+
+Caching the processed_data chunk means that it will get re-run if the dplyr pipeline is changed, but it won’t get rerun if the read_csv() call changes. You can avoid that problem with the dependson chunk option:
+
+```{r processed_data, cache = TRUE, dependson = "raw_data"}
+processed_data <- rawdata %>% 
+  filter(!is.na(import_var)) %>% 
+  mutate(new_variable = complicated_transformation(x, y, z))
+```
+
+dependson should contain a character vector of every chunk that the cached chunk depends on. Knitr will update the results for the cached chunk whenever it detects that one of its dependencies have changed.
+
+knitr just check if code within .rmd has chenged, not the "CSV" file changes, so we can use this option:
+
+```{r raw_data, cache.extra = file.info("a_very_large_file.csv")}
+rawdata <- readr::read_csv("a_very_large_file.csv")
+```
+
+
+**To clean the cache** you can use `r knitr::clean_cache()`.
+
+
+Global options
+------------------------------------
+```{r eval = False}
+knitr::opts_chunk$set(
+  comment = "#>",
+  collapse = TRUE
+)
+```
+
+
+we can also use a option for all chanks by default; like when you want just print the output( and not code chanks):
+
+```{r eval = False}
+knitr::opts_chunk$set(
+  echo = FALSE
+)
+```
+

@@ -1,0 +1,273 @@
+---
+title: "Chapter18 - Themes"
+output: html_notebook
+---
+
+# 18.1 Introduction
+
+```{r}
+base <- ggplot(mpg, aes(cty, hwy, color = factor(cyl))) +
+  geom_jitter() + 
+  geom_abline(colour = "grey50", size = 2)
+base
+```
+
+```{r}
+labelled <- base +
+  labs(
+    x = "City mileage/gallon",
+    y = "Highway mileage/gallon",
+    colour = "Cylinders",
+    title = "Highway and city mileage are highly correlated"
+  ) +
+  scale_colour_brewer(type = "seq", palette = "Spectral")
+labelled
+```
+
+```{r}
+styled <- labelled +
+  theme_bw() + 
+  theme(
+    plot.title = element_text(face = "bold", size = 12),
+    legend.background = element_rect(fill = "white", size = 4, colour = "white"),
+    legend.justification = c(0, 1),
+    legend.position = c(0, 1),
+    axis.ticks = element_line(colour = "grey70", size = 0.2),
+    panel.grid.major = element_line(colour = "grey70", size = 0.2),
+    panel.grid.minor = element_blank()
+  )
+styled
+```
+
+# 18.2 Complete themes
+
+
+```{r}
+df <- data.frame(x = 1:3, y = 1:3)
+base <- ggplot(df, aes(x, y)) + geom_point()
+base + theme_grey() + ggtitle("theme_grey()")
+base + theme_bw() + ggtitle("theme_bw()")
+base + theme_linedraw() + ggtitle("theme_linedraw()")
+
+base + theme_light() + ggtitle("theme_light()")
+base + theme_dark() + ggtitle("theme_dark()")
+base + theme_minimal()  + ggtitle("theme_minimal()")
+
+base + theme_classic() + ggtitle("theme_classic()")
+base + theme_void() + ggtitle("theme_void()")
+```
+
+```{r}
+library(ggthemes)
+base + theme_tufte() + ggtitle("theme_tufte()")
+base + theme_solarized() + ggtitle("theme_solarized()")
+base + theme_excel() + ggtitle("theme_excel()") # ;)
+```
+
+## 18.2.1 Exercises
+### question 1
+```{r}
+df <- data.frame(x = 1:3, y = 1:3)
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_calc() +ggtitle("theme_calc()")
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_economist() +ggtitle("theme_economist()") +
+  ylim(0, 10)
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_excel() +ggtitle("theme_excel()") +
+  ylim(0, 10)
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_fivethirtyeight() +ggtitle("theme_fivethirtyeight()") +
+  ylim(0, 10)
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_pander() +ggtitle("theme_pander()") +
+  ylim(0, 10)
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_solarized() +ggtitle("theme_solarized()") +
+  ylim(0, 10)
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_solarized_2() +ggtitle("theme_solarized_2()") +
+  ylim(0, 10)
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_tufte() +ggtitle("theme_tufte()") +
+  ylim(0, 10)
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_stata() +ggtitle("theme_stata()") +
+  ylim(0, 10)
+ggplot(df, aes(x, y)) +
+  geom_point() +
+  theme_wsj() +ggtitle("theme_wsj()") +
+  ylim(0, 10)
+```
+
+# 18.3 Modifying theme components
+
+```{r}
+base_t <- base + labs(title = "This is a ggplot") + xlab(NULL) + ylab(NULL)
+base_t + theme(plot.title = element_text(size = 16))
+base_t + theme(plot.title = element_text(face = "bold", colour = "red"))
+base_t + theme(plot.title = element_text(hjust = 1))
+```
+
+```{r}
+# The margins here look asymmetric because there are also plot margins
+base_t + theme(plot.title = element_text(margin = margin()))
+base_t + theme(plot.title = element_text(margin = margin(t = 10, b = 10)))
+base_t + theme(axis.title.y = element_text(margin = margin(r = 10)))
+```
+
+```{r}
+base + theme(panel.grid.major = element_line(colour = "black"))
+base + theme(panel.grid.major = element_line(size = 2))
+base + theme(panel.grid.major = element_line(linetype = "dotted"))
+```
+
+```{r}
+base + theme(plot.background = element_rect(fill = "grey80", colour = NA))
+base + theme(plot.background = element_rect(colour = "red", size = 2))
+base + theme(panel.background = element_rect(fill = "linen"))
+```
+
+```{r}
+base
+last_plot() + theme(panel.grid.minor = element_blank())
+last_plot() + theme(panel.grid.major = element_blank())
+```
+
+```{r}
+last_plot() + theme(panel.background = element_blank())
+last_plot() + theme(
+  axis.title.x = element_blank(), 
+  axis.title.y = element_blank()
+)
+last_plot() + theme(axis.line = element_line(colour = "grey50"))
+```
+
+```{r}
+old_theme <- theme_update(
+  plot.background = element_rect(fill = "lightblue3", colour = NA),
+  panel.background = element_rect(fill = "lightblue", colour = NA),
+  axis.text = element_text(colour = "linen"),
+  axis.title = element_text(colour = "linen")
+)
+base
+theme_set(old_theme)
+base
+```
+
+# 18.4 Theme elements
+
+## 18.4.1 Plot elements
+
+```{r}
+base + theme(plot.background = element_rect(colour = "grey50", size = 2))
+base + theme(
+  plot.background = element_rect(colour = "grey50", size = 2),
+  plot.margin = margin(2, 2, 2, 2)
+)
+base + theme(plot.background = element_rect(fill = "lightblue"))
+```
+
+## 18.4.2 Axis elements
+
+```{r}
+df <- data.frame(x = 1:3, y = 1:3)
+base <- ggplot(df, aes(x, y)) + geom_point()
+
+# Accentuate the axes
+base + theme(axis.line = element_line(colour = "grey50", size = 1))
+# Style both x and y axis labels
+base + theme(axis.text = element_text(color = "blue", size = 12))
+# Useful for long labels
+base + theme(axis.text.x = element_text(angle = -90, vjust = 0.5))
+```
+
+```{r}
+df <- data.frame(
+  x = c("label", "a long label", "an even longer label"), 
+  y = 1:3
+)
+base <- ggplot(df, aes(x, y)) + geom_point()
+base
+base + 
+  theme(axis.text.x = element_text(angle = -30, vjust = 1, hjust = 0)) + 
+  xlab(NULL) + 
+  ylab(NULL)
+```
+
+## 18.4.3 Legend elements
+```{r}
+df <- data.frame(x = 1:4, y = 1:4, z = rep(c("a", "b"), each = 2))
+base <- ggplot(df, aes(x, y, colour = z)) + geom_point()
+
+base + theme(
+  legend.background = element_rect(
+    fill = "lemonchiffon", 
+    colour = "grey50", 
+    size = 1
+  )
+)
+base + theme(
+  legend.key = element_rect(color = "grey50"),
+  legend.key.width = unit(0.9, "cm"),
+  legend.key.height = unit(0.75, "cm")
+)
+base + theme(
+  legend.text = element_text(size = 15),
+  legend.title = element_text(size = 15, face = "bold")
+)
+```
+
+
+## 18.4.4 Panel elements
+
+```{r}
+base <- ggplot(df, aes(x, y)) + geom_point()
+# Modify background
+base + theme(panel.background = element_rect(fill = "lightblue"))
+
+# Tweak major grid lines
+base + theme(
+  panel.grid.major = element_line(color = "gray60", size = 0.8)
+)
+# Just in one direction  
+base + theme(
+  panel.grid.major.x = element_line(color = "gray60", size = 0.8)
+)
+```
+
+```{r}
+base2 <- base + theme(plot.background = element_rect(colour = "grey50"))
+# Wide screen
+base2 + theme(aspect.ratio = 9 / 16)
+# Long and skiny
+base2 + theme(aspect.ratio = 2 / 1)
+# Square
+base2 + theme(aspect.ratio = 1)
+```
+
+## 18.4.5 Faceting elements
+
+```{r}
+df <- data.frame(x = 1:4, y = 1:4, z = c("a", "a", "b", "b"))
+base_f <- ggplot(df, aes(x, y)) + geom_point() + facet_wrap(~z)
+
+base_f
+base_f + theme(panel.margin = unit(0.5, "in"))
+
+
+base_f + theme(
+  strip.background = element_rect(fill = "grey20", color = "grey80", size = 1),
+  strip.text = element_text(colour = "white")
+)
+```
+

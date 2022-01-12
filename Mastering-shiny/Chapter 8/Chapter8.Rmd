@@ -1,0 +1,528 @@
+---
+title: "Chapter8 - User feedback"
+output: html_notebook
+---
+
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+```
+
+# 8.1 Validation
+
+## 8.1.1 Validating input
+
+you should add `useShinyFeedback()` to the ui and then use `feedback()`, `feedbackWarning()`, `feedbackDanger()`, or `feedbackSuccess()` in `server`.
+
+these 4 functions have 3 main arguments and 2 optional arguments for customization
+1- `inputid`: the id of the input where the feedback should be placed.
+2- `show`: a logical expression, determining whether or not to show the feedback.
+3- `text`: the text for the user.
+* `icon`
+* `color`
+
+```{r}
+ui <- fluidPage(
+  shinyFeedback::useShinyFeedback(),
+  numericInput("n", "n", value = 10),
+  textOutput("half")
+)
+
+server <- function(input, output, session) {
+  observeEvent(input$n,
+    shinyFeedback::feedbackWarning(
+      "n", 
+      input$n %% 2 != 0,
+      "Please select an even number"
+    )  
+  )
+  output$half <- renderText(input$n / 2)
+}
+shinyApp(ui, server)
+```
+
+
+To stop inputs from triggering reactive changes, use `req()` that takes a logical value.
+
+```{r}
+server <- function(input, output, session) {
+  half <- reactive({
+    even <- input$n %% 2 == 0
+    shinyFeedback::feedbackWarning("n", !even, "Please select an even number")
+    req(even)
+    input$n / 2    
+  })
+  
+  output$half <- renderText(half())
+}
+shinyApp(ui, server)
+```
+
+
+## 8.1.2 Pausing execution with req()
+
+you can stop an action by setting the default `value` to "" (either In `textInput()` by using `value = ""` or by  `selectInput()`, by provide an empty choice, `""`).
+
+```{r}
+ui <- fluidPage(
+  selectInput("language", "Language", choices = c("", "English", "Maori")),
+  textInput("name", "Name"),
+  textOutput("greeting")
+)
+
+server <- function(input, output, session) {
+  greetings <- c(
+    English = "Hello", 
+    Maori = "Ki ora"
+  )
+  output$greeting <- renderText({
+    paste0(greetings[[input$language]], " ", input$name, "!")
+  })
+}
+shinyApp(ui, server)
+```
+
+but in this way you got an error, so you can solve this problem by using `req()`:
+
+```{r}
+server <- function(input, output, session) {
+  greetings <- c(
+    English = "Hello", 
+    Maori = "Ki ora"
+  )
+  output$greeting <- renderText({
+    req(input$language, input$name)
+    paste0(greetings[[input$language]], " ", input$name, "!")
+  })
+}
+shinyApp(ui, server)
+```
+
+
+## 8.1.3 req() and validation
+
+
+using `cancelOutput = TRUE` leaves them displaying the last good value.
+```{r}
+ui <- fluidPage(
+  shinyFeedback::useShinyFeedback(),
+  textInput("dataset", "Dataset name"), 
+  tableOutput("data")
+)
+
+server <- function(input, output, session) {
+  data <- reactive({
+    req(input$dataset)
+    
+    exists <- exists(input$dataset, "package:datasets")
+    shinyFeedback::feedbackDanger("dataset", !exists, "Unknown dataset")
+    req(exists, cancelOutput = TRUE)
+
+    get(input$dataset, "package:datasets")
+  })
+  
+  output$data <- renderTable({
+    head(data())
+  })
+}
+shinyApp(ui, server)
+```
+
+## 8.1.4 Validate output
+ sometimes the invalid state is a result of a combination of inputs so you want to show the error in the output.
+ so you must use `shiny::validate()`:
+ 
+```{r}
+ui <- fluidPage(
+  numericInput("x", "x", value = 0),
+  selectInput("trans", "transformation", 
+    choices = c("square", "log", "square-root")
+  ),
+  textOutput("out")
+)
+
+server <- function(input, output, server) {
+  output$out <- renderText({
+    if (input$x < 0 && input$trans %in% c("log", "square-root")) {
+      validate("x can not be negative for this transformation")
+    }
+    
+    switch(input$trans,
+      square = input$x ^ 2,
+      "square-root" = sqrt(input$x),
+      log = log(input$x)
+    )
+  })
+}
+shinyApp(ui, server)
+```
+
+
+# 8.2 Notifications
+
+## 8.2.1 Transient notification
+
+```{r}
+ui <- fluidPage(
+  actionButton("goodnight", "Good night")
+)
+server <- function(input, output, session) {
+  observeEvent(input$goodnight, {
+    showNotification("So long")
+    Sys.sleep(1)
+    showNotification("Farewell")
+    Sys.sleep(1)
+    showNotification("Auf Wiedersehen")
+    Sys.sleep(1)
+    showNotification("Adieu")
+  })
+}
+shinyApp(ui, server)
+```
+
+By default, the message will disappear after 5 seconds.
+use `duration` argument to override this default.
+
+```{r}
+server <- function(input, output, session) {
+  observeEvent(input$goodnight, {
+    showNotification("So long", duration = 1)
+    Sys.sleep(1)
+    showNotification("Farewell", type = "message")
+    Sys.sleep(1)
+    showNotification("Auf Wiedersehen", type = "warning")
+    Sys.sleep(1)
+    showNotification("Adieu", type = "error")
+  })
+}
+shinyApp(ui, server)
+```
+
+## 8.2.2 Removing on completion
+
+```{r}
+server <- function(input, output, session) {
+  data <- reactive({
+    id <- showNotification("Reading data...", duration = NULL, closeButton = FALSE)
+    on.exit(removeNotification(id), add = TRUE)
+    
+    read.csv(input$file$datapath)
+  })
+}
+```
+
+
+## 8.2.3 Progressive updates
+
+```{r}
+ui <- fluidPage(
+  tableOutput("data")
+)
+
+server <- function(input, output, session) {
+  notify <- function(msg, id = NULL) {
+    showNotification(msg, id = id, duration = NULL, closeButton = FALSE)
+  }
+
+  data <- reactive({ 
+    id <- notify("Reading data...")
+    on.exit(removeNotification(id), add = TRUE)
+    Sys.sleep(1)
+      
+    notify("Reticulating splines...", id = id)
+    Sys.sleep(1)
+    
+    notify("Herding llamas...", id = id)
+    Sys.sleep(1)
+
+    notify("Orthogonalizing matrices...", id = id)
+    Sys.sleep(1)
+        
+    mtcars
+  })
+  
+  output$data <- renderTable(head(data()))
+}
+shinyApp(ui, server)
+```
+
+
+# 8.3 Progress bars
+## 8.3.1 Shiny
+
+```{r}
+# Create a progress bar object with `Progress$new(max = number_of_steps)`.
+progress <- Progress$new(max = 5)
+
+# Display the progress bar by calling the `$set()` method, 
+# providing a title for the progress bar in the `message` argument.
+progress$set(message = "Starting process")
+
+# Call `$inc()` repeatedly, once for each step.
+for (i in 1:5) {
+  progress$inc(1)
+}
+
+# When done, call `$close()` to terminate the progress bar.
+progress$close()
+```
+
+```{r}
+ui <- fluidPage(
+  numericInput("steps", "How many steps?", 10),
+  actionButton("go", "go"),
+  textOutput("result")
+)
+
+server <- function(input, output, session) {
+  data <- reactive({
+    req(input$go)
+    
+    progress <- Progress$new(max = input$steps)
+    on.exit(progress$close())
+    
+    progress$set(message = "Computing random number")
+    for (i in seq_len(input$steps)) {
+      Sys.sleep(0.5)
+      progress$inc(1)
+    }
+    runif(1)
+  })
+  
+  output$result <- renderText(round(data(), 2))
+}
+shinyApp(ui, server)
+```
+
+
+## 8.3.2 Waiter
+
+```{r}
+ui <- fluidPage(
+  waiter::use_waitress(),
+  numericInput("steps", "How many steps?", 10),
+  actionButton("go", "go"),
+  textOutput("result")
+)
+server <- function(input, output, session) {
+  data <- reactive({
+    req(input$go)
+    waitress <- waiter::Waitress$new(max = input$steps)
+    on.exit(waitress$close())
+    
+    for (i in seq_len(input$steps)) {
+      Sys.sleep(0.5)
+      waitress$inc(1)
+    }
+    
+    runif(1)
+  })
+  
+  output$result <- renderText(round(data(), 2))
+}
+shinyApp(ui, server)
+```
+
+
+
+You can override the default `theme` to use one of:
+
+`overlay`: an opaque progress bar that hides the whole page
+`overlay-opacity`: a translucent progress bar that covers the whole page
+`overlay-percent`: an opaque progress bar that also displays a numeric percentage.
+
+Instead of showing a progress bar for the entire page, you can overlay it on an existing input or output by setting the `selector` parameter, e.g.:
+```{r}
+ui <- fluidPage(
+  waiter::use_waitress(),
+  numericInput("steps", "How many steps?", 10),
+  actionButton("go", "go"),
+  textOutput("result")
+)
+server <- function(input, output, session) {
+  data <- reactive({
+    req(input$go)
+    waitress <- waiter::Waitress$new(selector = "#steps", theme = "overlay")
+    on.exit(waitress$close())
+    
+    for (i in seq_len(input$steps)) {
+      Sys.sleep(0.5)
+      waitress$inc(1)
+    }
+    
+    runif(1)
+  })
+  
+  output$result <- renderText(round(data(), 2))
+}
+shinyApp(ui, server)
+
+```
+
+## 8.3.3 Spinners
+if you don’t know exactly how long an operation will take, use `waiter` instead of `waitress`
+```{r}
+ui <- fluidPage(
+  waiter::use_waiter(),
+  actionButton("go", "go"),
+  textOutput("result")
+)
+
+server <- function(input, output, session) {
+  data <- reactive({
+    req(input$go)
+    waiter <- waiter::Waiter$new()
+    waiter$show()
+    on.exit(waiter$hide())
+    
+    Sys.sleep(sample(5, 1))
+    runif(1)
+  })
+  output$result <- renderText(round(data(), 2))
+}
+shinyApp(ui, server)
+```
+
+
+```{r}
+ui <- fluidPage(
+  waiter::use_waiter(),
+  actionButton("go", "go"),
+  plotOutput("plot"),
+)
+
+server <- function(input, output, session) {
+  data <- reactive({
+    req(input$go)
+    waiter::Waiter$new(id = "plot")$show()
+    
+    Sys.sleep(3)
+    data.frame(x = runif(50), y = runif(50))
+  })
+  
+  output$plot <- renderPlot(plot(data()), res = 96)
+}
+shinyApp(ui, server)
+```
+
+An even simpler alternative is to use the `shinycssloaders` package. you just use `shinycssloaders::withSpinner()` to wrap outputs that you want to automatically get a spinner when they have been invalidated.
+
+```{r}
+library(shinycssloaders)
+
+ui <- fluidPage(
+  actionButton("go", "go"),
+  withSpinner(plotOutput("plot")),
+)
+server <- function(input, output, session) {
+  data <- reactive({
+    req(input$go)
+    Sys.sleep(3)
+    data.frame(x = runif(50), y = runif(50))
+  })
+  
+  output$plot <- renderPlot(plot(data()), res = 96)
+}
+shinyApp(ui, server)
+```
+
+# 8.4 Confirming and undoing
+
+## 8.4.1 Explicit confirmation
+
+```{r}
+modal_confirm <- modalDialog(
+  "Are you sure you want to continue?",
+  title = "Deleting files",
+  footer = tagList(
+    actionButton("cancel", "Cancel"),
+    actionButton("ok", "Delete", class = "btn btn-danger")
+  )
+)
+modal_confirm
+```
+
+
+example:
+```{r}
+ui <- fluidPage(
+  actionButton("delete", "Delete all files?")
+)
+server <- function(input, output, session) {
+  observeEvent(input$delete, {
+    showModal(modal_confirm)
+  })
+  
+  observeEvent(input$ok, {
+    showNotification("Files deleted")
+    removeModal()
+  })
+  observeEvent(input$cancel, 
+    removeModal()
+  )
+}
+shinyApp(ui, server)
+```
+
+
+## 8.4.2 Undoing an action
+
+```{r}
+ui <- fluidPage(
+  textAreaInput("message", 
+    label = NULL, 
+    placeholder = "What's happening?",
+    rows = 3
+  ),
+  actionButton("tweet", "Tweet")
+)
+
+runLater <- function(action, seconds = 3) {
+  observeEvent(
+    invalidateLater(seconds * 1000), action, 
+    ignoreInit = TRUE, 
+    once = TRUE, 
+    ignoreNULL = FALSE,
+    autoDestroy = FALSE
+  )
+}
+
+server <- function(input, output, session) {
+  waiting <- NULL
+  last_message <- NULL
+  
+  observeEvent(input$tweet, {
+    notification <- glue::glue("Tweeted '{input$message}'")
+    last_message <<- input$message
+    updateTextAreaInput(session, "message", value = "")
+
+    showNotification(
+      notification,
+      action = actionButton("undo", "Undo?"),
+      duration = NULL,
+      closeButton = FALSE,
+      id = "tweeted",
+      type = "warning"
+    )
+
+    waiting <<- runLater({
+      cat("Actually sending tweet...\n")
+      removeNotification("tweeted")
+    })
+  })
+  
+  observeEvent(input$undo, {
+    waiting$destroy()
+    showNotification("Tweet retracted", id = "tweeted")
+    updateTextAreaInput(session, "message", value = last_message)
+  })
+}
+shinyApp(ui, server)
+```
+
+

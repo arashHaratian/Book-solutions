@@ -1,0 +1,205 @@
+---
+title: "Chapter2 - Efficient set-up"
+output: html_notebook
+---
+
+```{r}
+library("benchmarkme")
+```
+
+# 2.2 Operating system
+
+```{r}
+Sys.info()
+?Sys.info
+```
+
+## Exercises
+
+### q1
+
+```{r}
+Sys.info()
+```
+
+
+
+
+### q2
+
+```{r}
+# 1: Create large dataset
+X = as.data.frame(matrix(rnorm(1e8), nrow = 1e7))
+# 2: Find the median of each column using a single core
+r1 = lapply(X, median)
+# 3: Find the median of each column using many cores
+r2 = parallel::mclapply(X, median)
+```
+
+# 2.3 R version
+
+## 2.3.2 Updating R
+
+```{r, eval = FALSE}
+installr::updateR()
+```
+
+## 2.3.3 Installing R packages
+
+```{r, eval = FALSE}
+pkgs = c("raster", "leaflet", "rgeos") # package names
+install.packages(pkgs)
+
+
+inst = lapply(pkgs, library, character.only = TRUE) # load them
+```
+
+
+> Storing package names in a character vector object such as pkgs is also useful because it allows us to refer back to them again and again.
+
+
+
+# 2.4 R startup
+
+## 2.4.3 The location of startup files
+
+- `R_HOME`:
+```{r}
+R.home()
+```
+
+- `HOME`:
+```{r}
+Sys.getenv("HOME")
+```
+
+
+precedence of `.Rprofile` and `.Renviron` is : first search in project file, then `HOME` and then `R_HOME`.
+
+
+```{r}
+file.path("C:", "DATA", "data.csv")
+normalizePath("C:/DATA/data.csv")
+```
+
+## 2.4.4 The .Rprofile file
+```{r}
+site_path <- R.home(component = "home")
+fname <- file.path(site_path, "etc", "Rprofile.site")
+file.exists(fname)
+```
+
+## 2.4.5 An example .Rprofile file
+
+```{r, eval = FALSE}
+file.edit("./.Rprofile")
+```
+
+```{r}
+help("Startup")
+```
+
+### 2.4.5.1 Setting options
+
+```{r}
+?options
+```
+
+
+
+### 2.4.5.3 The fortunes package
+```{r}
+fortunes::fortune(13)
+```
+
+```{r}
+search()
+```
+
+### 2.4.5.5 Creating hidden environments with .Rprofile
+
+you can make hidden variables like this:
+
+```{r}
+.obj = 1
+".obj" %in% ls()
+```
+
+also you can make a hidden environment and then add your functions to that and `attach()` it to use functions only be their names.
+
+
+## 2.4.6 The .Renviron file
+
+```{r}
+help("environment variables")
+```
+
+
+```{r}
+Sys.setenv("TEST" = "test-string") # set an environment variable for the session
+Sys.getenv("TEST")
+Sys.unsetenv("TEST") # unset it
+```
+
+## Exercises
+
+### q1
+
+```{r}
+getwd()
+Sys.getenv("HOME")
+Sys.getenv("R_HOME")
+```
+
+### q2
+```{r}
+file.exists(paste0(getwd(), "/.Rprofile"))
+file.exists(paste0(Sys.getenv("HOME"), "/.Rprofile"))
+file.exists(paste0(Sys.getenv("R_HOME"), "/.Rprofile"))
+```
+
+```{r}
+file.exists(paste0(getwd(), "/.Renviron"))
+file.exists(paste0(Sys.getenv("HOME"), "/.Renviron"))
+file.exists(paste0(Sys.getenv("R_HOME"), "/.Renviron"))
+```
+
+### q3
+
+
+```{r, eval= FALSE}
+# message("Happy efficient R programming")
+file.edit("./.Rprofile")
+```
+
+
+### q4
+
+Project dir. >> `HOME` >> `R_HOME`
+
+
+# 2.5 RStudio
+
+
+
+To keep things tidy, we recommend a sub-directory structure resembling the following:
+
+```   
+project/
+  - README.Rmd # Project description
+  - set-up.R  # Required packages
+  - R/ # For R code
+  - input # Data files
+  - graphics/
+  - output/ # Results
+```
+
+# 2.6 BLAS and alternative R interpreters
+
+```{r}
+library("benchmarkme")
+get_linear_algebra()
+
+res <- benchmark_std()
+```
+

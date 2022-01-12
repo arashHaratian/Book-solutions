@@ -1,0 +1,373 @@
+---
+title: "Chapter4 - Basic reactivity"
+output: html_notebook
+---
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+```
+
+
+# 4.2 The server function
+
+## 4.2.1 Input
+
+you can not update the input values.
+```{r}
+ui <- fluidPage(
+  numericInput("count", label = "Number of values", value = 100)
+)
+server <- function(input, output, session) {
+  input$count <- 10  
+}
+
+shinyApp(ui, server)
+```
+
+
+
+also you can just read the input inside the **reactive context** (functions like `renderText()` or `reactive()`).
+
+```{r}
+server <- function(input, output, session) {
+  message("The value of input$count is ", input$count)
+}
+
+shinyApp(ui, server)
+#> Error: Operation not allowed without an active reactive context. 
+#> (You tried to do something that can only be done from inside 
+#> a reactive expression or observer.)
+```
+
+## 4.2.2 Output
+outputs always must be used in concert with a `render` function and also you can not read an output.
+
+```{r}
+server <- function(input, output, session) {
+  output$greeting <- "Hello human"
+}
+shinyApp(ui, server)
+#> Error: Unexpected character output for greeting
+```
+
+```{r}
+server <- function(input, output, session) {
+  message("The greeting is ", output$greeting)
+}
+shinyApp(ui, server)
+#> Error: Reading objects from shinyoutput object not allowed.
+```
+
+
+# 4.3 Reactive programming
+
+
+```{r}
+ui <- fluidPage(
+  textInput("name", "What's your name?"),
+  textOutput("greeting")
+)
+
+server <- function(input, output, session) {
+  output$greeting <- renderText({
+    paste0("Hello ", input$name, "!")
+  })
+}
+
+shinyApp(ui, server)
+```
+
+
+>  ***Think of your app as providing Shiny with recipes, not giving it commands.***
+
+
+## 4.3.2 Laziness
+
+If you’re working on a Shiny app and you just can’t figure out why your code never gets run, double check that your UI and server functions are using the same identifiers.
+
+
+## 4.3.5 Execution order
+
+the order of the codes in the server function will not determine their running order, instead the reactive graph will determine the the order in which reactive code is run but it is better to sort the codes so the output and the reactive expressions only refer to things defined above(topological sort).
+
+# 4.4 Reactive expressions
+
+
+## 4.4.1 The motivation
+
+```{r}
+library(ggplot2)
+
+histogram <- function(x1, x2, binwidth = 0.1, xlim = c(-3, 3)) {
+  df <- data.frame(
+    x = c(x1, x2),
+    g = c(rep("x1", length(x1)), rep("x2", length(x2)))
+  )
+
+  ggplot(df, aes(x, fill = g)) +
+    geom_histogram(binwidth = binwidth) +
+    coord_cartesian(xlim = xlim)
+}
+
+t_test <- function(x1, x2) {
+  test <- t.test(x1, x2)
+  
+  sprintf(
+    "p value: %0.3f\n[%0.2f, %0.2f]",
+    test$p.value, test$conf.int[1], test$conf.int[2]
+  )
+}
+```
+
+
+```{r}
+x1 <- rnorm(100, mean = 0, sd = 0.5)
+x2 <- rnorm(200, mean = 0.15, sd = 0.9)
+
+histogram(x1, x2)
+cat(t_test(x1, x2))
+```
+
+
+## 4.4.2 The app
+
+```{r}
+ui <- fluidPage(
+  fluidRow(
+    column(4, 
+      "Distribution 1",
+      numericInput("n1", label = "n", value = 1000, min = 1),
+      numericInput("mean1", label = "µ", value = 0, step = 0.1),
+      numericInput("sd1", label = "σ", value = 0.5, min = 0.1, step = 0.1)
+    ),
+    column(4, 
+      "Distribution 2",
+      numericInput("n2", label = "n", value = 1000, min = 1),
+      numericInput("mean2", label = "µ", value = 0, step = 0.1),
+      numericInput("sd2", label = "σ", value = 0.5, min = 0.1, step = 0.1)
+    ),
+    column(4,
+      "Histogram",
+      numericInput("binwidth", label = "Bin width", value = 0.1, step = 0.1),
+      sliderInput("range", label = "range", value = c(-3, 3), min = -5, max = 5)
+    )
+  ),
+  fluidRow(
+    column(9, plotOutput("hist")),
+    column(3, verbatimTextOutput("ttest"))
+  )
+)
+
+
+server <- function(input, output, session) {
+  output$hist <- renderPlot({
+    x1 <- rnorm(input$n1, input$mean1, input$sd1)
+    x2 <- rnorm(input$n2, input$mean2, input$sd2)
+    
+    histogram(x1, x2, binwidth = input$binwidth, xlim = input$range)
+  }, res = 96)
+
+  output$ttest <- renderText({
+    x1 <- rnorm(input$n1, input$mean1, input$sd1)
+    x2 <- rnorm(input$n2, input$mean2, input$sd2)
+    
+    t_test(x1, x2)
+  })
+}
+
+shinyApp(ui, server)
+```
+
+## 4.4.3 The reactive graph
+
+in the code above, `x1` and `x2` in the `output$ttest` will update every time one the input changes (for example if you change `n1` the `x2` will be updated as well).
+also there is another problem, the histogram and t-test use separate random draws.
+
+## 4.4.4 Simplifying the graph
+
+
+```{r}
+server <- function(input, output, session) {
+  x1 <- reactive(rnorm(input$n1, input$mean1, input$sd1))
+  x2 <- reactive(rnorm(input$n2, input$mean2, input$sd2))
+
+  output$hist <- renderPlot({
+    histogram(x1(), x2(), binwidth = input$binwidth, xlim = input$range)
+  }, res = 96)
+
+  output$ttest <- renderText({
+    t_test(x1(), x2())
+  })
+}
+
+shinyApp(ui, server)
+```
+
+> **Rule of one** : whenever you copy and paste something once, you should consider extracting the repeated code out into a reactive expression.
+
+
+## 4.4.5 Why do we need reactive expressions?
+
+```{r}
+server <- function(input, output, session) {
+  x1 <- rnorm(input$n1, input$mean1, input$sd1)
+  x2 <- rnorm(input$n2, input$mean2, input$sd2)
+
+  output$hist <- renderPlot({
+    histogram(x1, x2, binwidth = input$binwidth, xlim = input$range)
+  }, res = 96)
+
+  output$ttest <- renderText({
+    t_test(x1, x2)
+  })
+}
+shinyApp(ui, server)
+```
+
+if you use functions:
+```{r}
+server <- function(input, output, session) { 
+  x1 <- function() rnorm(input$n1, input$mean1, input$sd1)
+  x2 <- function() rnorm(input$n2, input$mean2, input$sd2)
+
+  output$hist <- renderPlot({
+    histogram(x1(), x2(), binwidth = input$binwidth, xlim = input$range)
+  }, res = 96)
+
+  output$ttest <- renderText({
+    t_test(x1(), x2())
+  })
+}
+```
+it has the same problem as the original code: any input will cause all outputs to be recomputed, and the t-test and the histogram will be run on separate samples.
+
+
+# 4.5 Controlling timing of evaluation
+
+```{r}
+ui <- fluidPage(
+  fluidRow(
+    column(3, 
+      numericInput("lambda1", label = "lambda1", value = 3),
+      numericInput("lambda2", label = "lambda2", value = 3),
+      numericInput("n", label = "n", value = 1e4, min = 0)
+    ),
+    column(9, plotOutput("hist"))
+  )
+)
+server <- function(input, output, session) {
+  x1 <- reactive(rpois(input$n, input$lambda1))
+  x2 <- reactive(rpois(input$n, input$lambda2))
+  output$hist <- renderPlot({
+    histogram(x1(), x2(), binwidth = 1, xlim = c(0, 40))
+  }, res = 96)
+}
+shinyApp(ui, server)
+```
+
+## 4.5.1 Timed invalidation
+
+```{r}
+server <- function(input, output, session) {
+  timer <- reactiveTimer(500)
+  
+  x1 <- reactive({
+    timer()
+    rpois(input$n, input$lambda1)
+  })
+  x2 <- reactive({
+    timer()
+    rpois(input$n, input$lambda2)
+  })
+  
+  output$hist <- renderPlot({
+    histogram(x1(), x2(), binwidth = 1, xlim = c(0, 40))
+  }, res = 96)
+}
+shinyApp(ui, server)
+```
+
+here we make a dependency on `timer`.
+
+## 4.5.2 On click
+
+
+wrong solution(we added a new dependency, not replace the existing dependencies):
+```{r}
+ui <- fluidPage(
+  fluidRow(
+    column(3, 
+      numericInput("lambda1", label = "lambda1", value = 3),
+      numericInput("lambda2", label = "lambda2", value = 3),
+      numericInput("n", label = "n", value = 1e4, min = 0),
+      actionButton("simulate", "Simulate!")
+    ),
+    column(9, plotOutput("hist"))
+  )
+)
+
+server <- function(input, output, session) {
+  x1 <- reactive({
+    input$simulate
+    rpois(input$n, input$lambda1)
+  })
+  x2 <- reactive({
+    input$simulate
+    rpois(input$n, input$lambda2)
+  })
+  output$hist <- renderPlot({
+    histogram(x1(), x2(), binwidth = 1, xlim = c(0, 40))
+  }, res = 96)
+}
+shinyApp(ui, server)
+```
+
+
+we must use `eventReactive()`:
+
+```{r}
+server <- function(input, output, session) {
+  x1 <- eventReactive(input$simulate, {
+    rpois(input$n, input$lambda1)
+  })
+  x2 <- eventReactive(input$simulate, {
+    rpois(input$n, input$lambda2)
+  })
+
+  output$hist <- renderPlot({
+    histogram(x1(), x2(), binwidth = 1, xlim = c(0, 40))
+  }, res = 96)
+}
+shinyApp(ui, server)
+```
+
+
+# 4.6 Observers
+
+some actions and things may not appear on the app (like a debugging message, saving a file to a shared network drive, sending data to a web API) and you can not use `render functions`. Instead you need to use an **observer**.
+
+
+
+For example, the following modification to `server()` means that every time that `name` is updated, a message will be sent to the console:
+```{r}
+ui <- fluidPage(
+  textInput("name", "What's your name?"),
+  textOutput("greeting")
+)
+server <- function(input, output, session) {
+  text <- reactive(paste0("Hello ", input$name, "!"))
+  
+  output$greeting <- renderText(text())
+  observeEvent(input$name, {
+    message("Greeting performed")
+  })
+}
+shinyApp(ui, server)
+```
+
+`outputs` are like `observers` but they have a side effect.

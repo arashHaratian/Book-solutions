@@ -1,0 +1,210 @@
+---
+title: "Chapter11 - Bookmarking"
+output: html_notebook
+---
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+```
+
+
+# 11.1 Basic idea
+
+```{r}
+ui <- fluidPage(
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("omega", "omega", value = 1, min = -2, max = 2, step = 0.01),
+      sliderInput("delta", "delta", value = 1, min = 0, max = 2, step = 0.01),
+      sliderInput("damping", "damping", value = 1, min = 0.9, max = 1, step = 0.001),
+      numericInput("length", "length", value = 100)
+    ),
+    mainPanel(
+      plotOutput("fig")
+    )
+  )
+)
+server <- function(input, output, session) {
+  t <- reactive(seq(0, input$length, length = input$length * 100))
+  x <- reactive(sin(input$omega * t() + input$delta) * input$damping ^ t())
+  y <- reactive(sin(t()) * input$damping ^ t())
+  
+  output$fig <- renderPlot({
+    plot(x(), y(), axes = FALSE, xlab = "", ylab = "", type = "l", lwd = 2)
+  }, res = 96)
+}
+shinyApp(ui, server)
+```
+There are three things we need to do to make this app bookmarkable:
+
+1- Add a `bookmarkButton()` to the UI. This generates a button that the user clicks to generate the bookmarkable URL.
+
+2- Turn `ui` into a function. You need to do this because bookmarked apps have to replay the bookmarked values: effectively, Shiny modifies the default value for each input control. This means there’s no longer a single static UI but multiple possible UIs that depend on parameters in the URL; i.e. it has to be a function.
+
+3- Add `enableBookmarking = "url"` to the `shinyApp()` call.
+
+```{r}
+ui <- function(request) {
+  fluidPage(
+    sidebarLayout(
+      sidebarPanel(
+        sliderInput("omega", "omega", value = 1, min = -2, max = 2, step = 0.01),
+        sliderInput("delta", "delta", value = 1, min = 0, max = 2, step = 0.01),
+        sliderInput("damping", "damping", value = 1, min = 0.9, max = 1, step = 0.001),
+        numericInput("length", "length", value = 100),
+        bookmarkButton()
+      ),
+      mainPanel(
+        plotOutput("fig")
+      )
+    )
+  )
+}
+shinyApp(ui, server, enableBookmarking = "url")
+```
+
+“generating a bookmark” means recording the current values of the inputs in the parameters of URL.
+
+
+## 11.1.1 Updating the URL
+
+instead of an explicit button, you can update the url by using the following code in server:
+
+```{r}
+# Automatically bookmark every time an input changes
+observe({
+  reactiveValuesToList(input)
+  session$doBookmark()
+})
+# Update the query string
+onBookmarked(updateQueryString)
+```
+
+example:
+
+```{r}
+server <- function(input, output, session) {
+  t <- reactive(seq(0, input$length, length = input$length * 100))
+  x <- reactive(sin(input$omega * t() + input$delta) * input$damping ^ t())
+  y <- reactive(sin(t()) * input$damping ^ t())
+  
+  output$fig <- renderPlot({
+    plot(x(), y(), axes = FALSE, xlab = "", ylab = "", type = "l", lwd = 2)
+  }, res = 96)
+  
+  observe({
+    reactiveValuesToList(input)
+    session$doBookmark()
+  })
+  onBookmarked(updateQueryString)
+}
+shinyApp(ui, server, enableBookmarking = "url")
+```
+
+
+## 11.1.2 Storing richer state
+the URL gets longer as you are using more parameter and it’s obviously not going to be able to capture an uploaded file.
+so for these cases, you might instead want to use `enableBookmarking = "server"`, which saves the state to an `.rds` file on the server.
+
+
+```{r}
+server <- function(input, output, session) {
+  t <- reactive(seq(0, input$length, length = input$length * 100))
+  x <- reactive(sin(input$omega * t() + input$delta) * input$damping ^ t())
+  y <- reactive(sin(t()) * input$damping ^ t())
+  
+  output$fig <- renderPlot({
+    plot(x(), y(), axes = FALSE, xlab = "", ylab = "", type = "l", lwd = 2)
+  }, res = 96)
+  
+  observe({
+    reactiveValuesToList(input)
+    session$doBookmark()
+  })
+  onBookmarked(updateQueryString)
+}
+shinyApp(ui, server, enableBookmarking = "server")
+```
+# 11.2 Bookmarking challenges
+
+This section briefly covers some of the cases which need a little extra care.
+
+
+# 11.3 Exercises
+
+### question 1
+
+```{r}
+library(shiny)
+library(ambient)
+
+ui <- function(request){
+  fluidPage(
+    sidebarLayout(
+      sidebarPanel(
+        sliderInput("freq", "Freq.", min = 0, max = 1, value = 0.01),
+        selectInput("fractal", "Fractal", choices = c("none", "fbm", "billow", "rigid-multi")),
+        sliderInput("gain", "Gain", min = 0, max = 1, value = 0.5),
+      ),
+      mainPanel(plotOutput("fig"))
+    )
+  )
+}
+
+server <- function(input, output, session) {
+  
+  grid <- long_grid(seq(1, 10, length.out = 1000), seq(1, 10, length.out = 1000))
+  
+  noise <- reactive({
+    ambient::gen_simplex(
+      x = grid$x,
+      y = grid$y,
+      seed = 77,
+      frequency = input$freq,
+      fractal = input$fractal,
+      gain = input$gain
+    )
+  })
+  
+  output$fig <- renderPlot(plot(grid, noise()))
+  
+  observe({
+    reactiveValuesToList(input)
+    session$doBookmark()
+  })
+  onBookmarked(updateQueryString)
+}
+
+shinyApp(ui, server, enableBookmarking = "url")
+```
+
+
+
+### question 2
+
+```{r}
+library(shiny)
+
+ui <- function(request){
+  fluidPage(
+    fileInput("data", label = "upload a file"),
+    tableOutput("head"),
+     bookmarkButton()
+  )
+}
+server <- function(input, output, session) {
+  data <- reactive({
+    req(input$data)
+    readr::read_tsv(input$data$datapath)
+  })
+  
+  output$head <- renderTable(head(data()))
+  
+}
+
+shinyApp(ui, server, enableBookmarking = "server")
+```

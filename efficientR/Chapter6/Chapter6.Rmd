@@ -1,0 +1,357 @@
+---
+title: "Chapter6 - Efficient data carpentry"
+output: html_notebook
+---
+
+```{r}
+library("tibble")
+library("tidyr")
+library("stringr")
+library("readr")
+library("dplyr")
+library("data.table")
+library("efficient")
+```
+
+# 6.2 Efficient data frames with tibble
+
+
+```{r}
+library("tibble")
+tibble(x = 1:3, y = c("A", "B", "C"))
+```
+
+## Exercise
+
+```{r}
+df_base <- data.frame(colA = "A")
+```
+
+```{r}
+print(df_base)
+df_base$colA
+df_base$col
+df_base$colB
+```
+
+
+```{r}
+df_tibble <- tibble(colA = "A")
+print(df_tibble)
+df_tibble$colA
+df_tibble$col
+df_tibble$colB
+
+```
+
+
+# 6.3 Tidying data with tidyr and regular expressions
+
+```{r}
+data(pew) # see ?pew - dataset from the efficient package
+pew[1:3, 1:4]
+```
+
+## 6.3.1 Make wide tables long with pivot_longer()
+
+```{r}
+dim(pew)
+pewt <- pivot_longer(data = pew, -religion, names_to = "income", values_to = "count")
+dim(pewt)
+pewt[c(1:3, 50), ]
+```
+
+```{r}
+pivot_longer(pew, -religion)
+```
+
+## 6.3.2 Split joint variables with separate()
+
+```{r}
+agesex <- c("m0-10", "f0-10") # create compound variable
+n <- c(3, 5) # create a value for each observation
+agesex_df <- tibble(agesex, n) # create a data frame
+separate(agesex_df, agesex, c("sex", "age"), sep = 1)
+```
+
+> the standard evaluation version of `separate(agesex_df, agesex, c("sex", "age"), 1)` is `separate_(agesex_df, "agesex", c("sex", "age"), 1)`.
+
+
+
+## 6.3.4 Regular expressions
+
+```{r}
+x <- c("Hi I'm Robin.", "DoB 1985")
+
+grepl(pattern = "9", x = x)
+str_detect(string = x, pattern = "9")
+```
+
+```{r}
+grep(pattern = "9", x = x)
+which(str_detect(string = x, pattern = "9"))
+```
+
+## Exercises
+
+### q3
+
+```{r}
+lnd_geo_new <- lnd_geo_df %>% 
+  separate(name_date, c("name", "date"), -4) %>%
+  mutate(name = str_remove(name, "-"))
+
+lnd_geo_new
+```
+
+### q4
+
+```{r}
+strings <- c(" 219 733 8965", "329-293-8753 ", "banana", "595 794 7569",
+             "387 287 6718", "apple", "233.398.9187  ", "482 952 3315", "239 923 8115",
+             "842 566 4692", "Work: 579-499-7527", "$1000", "Home: 543.355.3679")
+```
+
+```{r}
+str_detect(strings,"[0-9]")
+```
+
+```{r}
+grepl("[0-9]", strings)
+```
+
+```{r}
+str_extract(strings, pattern = "[A-z]+")
+```
+
+```{r}
+regmatches(m = regexpr("[A-z]+", strings), strings)
+```
+
+
+# 6.4 Efficient data processing with dplyr
+
+```{r}
+data("ghg_ems", package = "efficient")
+top_table <- 
+  ghg_ems %>%
+  filter(!grepl("World|Europe", Country)) %>%
+  group_by(Country) %>%
+  summarise(Mean = mean(Transportation),
+            Growth = diff(range(Transportation))) %>%
+  slice_max(n = 3, Growth) %>%
+  arrange(desc(Growth))
+top_table
+```
+
+## 6.4.1 Renaming columns
+
+```{r}
+data(package = "efficient", wb_ineq)
+```
+
+```{r}
+wb_ineq <- rename(wb_ineq, code = `Country Code`)
+```
+
+## 6.4.2 Changing column classes
+
+```{r}
+wb_ineq <- mutate(wb_ineq, gini = as.numeric(gini))
+```
+
+
+```{r}
+cols_to_change <- 5:9 # column ids to change
+wb_ineq <- mutate(wb_ineq, across(cols_to_change, as.numeric))
+```
+
+
+## 6.4.3 Filtering rows
+
+```{r}
+aus2 <- filter(wb_ineq, Country == "Australia")
+```
+
+## 6.4.4 Chaining operations
+
+
+```{r}
+wb_ineq %>%
+  select(Year, gini) %>%
+  mutate(decade = floor(as.numeric(Year) / 10) * 10) %>%
+  group_by(decade) %>%
+  summarise(mean(gini, na.rm = TRUE))
+```
+
+```{r}
+wb_ineq %>%
+  filter(grepl("g", Country)) %>%
+  group_by(Year) %>%
+  summarise(gini = mean(gini, na.rm  = TRUE)) %>%
+  arrange(desc(gini)) %>%
+  top_n(n = 5)
+```
+
+### Exercises
+#### q2
+
+
+```{r}
+wb_ineq %>% 
+  filter(!grepl("a", Country)) %>%
+  filter(!is.na(gini)) %>% 
+  group_by(Year) %>% 
+  summarise(mean_gini = min(mean(gini), na.rm = TRUE)) %>% 
+  top_n(-1, mean_gini)
+```
+
+## 6.4.5 Data aggregation
+
+```{r}
+data(ghg_ems, package = "efficient")
+names(ghg_ems)
+nrow(ghg_ems)
+length(unique(ghg_ems$Country))
+```
+
+
+
+```{r}
+group_by(ghg_ems, Country) %>%
+  summarise(mean_eco2 = mean(Electricity, na.rm  = TRUE))
+```
+
+
+```{r}
+countries <- group_by(wb_ineq, Country)
+summarise(countries, mean_gini = mean(gini, na.rm = TRUE))
+```
+
+
+```{r}
+summarise(countries,
+  # number of rows per country
+  obs = n(),
+  med_t10 = median(top10, na.rm  = TRUE),
+  # standard deviation
+  sdev = sd(gini, na.rm  = TRUE),
+  # number with gini > 30
+  n30 = sum(gini > 30, na.rm  = TRUE),
+  sdn30 = sd(gini[gini > 30], na.rm  = TRUE),
+  # range
+  dif = max(gini, na.rm = T) - min(gini, na.rm  = TRUE)
+  )
+```
+
+### Exercises
+#### q1
+
+```{r}
+data("ghg_ems", package = "efficient")
+ghg_ems %>%
+  filter(!grepl("World|Europe", Country)) %>% 
+  filter(Year == 2012) %>% 
+  top_n(3, Transportation) %>%
+  arrange(desc(Transportation))
+```
+
+
+## 6.4.6 Non standard evaluation
+
+```{r}
+library(rlang)
+# 1: Default NSE function
+group_by(cars, speed = cut(speed, c(0, 10, 100))) %>%
+  summarise(mean_dist = mean(dist))
+
+# 2: Evaluation from character string
+group_by(cars, speed = !!parse_quo("cut(speed, c(0, 10, 100))", env = current_env())) %>%
+  summarise(mean_dist = !!parse_quo("mean(dist)", env = current_env()))
+
+# 3: Using !! to evaluate 'quosures' when appropriate
+q1 <- quo(cut(speed, c(0, 10, 100)))
+q2 <- quo(mean(dist))
+group_by(cars, speed = !!q1) %>%
+  summarise(mean_dist = !!q2)
+```
+
+
+# 6.5 Combining datasets
+
+
+```{r}
+library("ggmap")
+world <- map_data("world")
+names(world)
+```
+
+```{r}
+world = rename(world, Country = region)
+ghg_ems$All <- rowSums(ghg_ems[3:7])
+```
+
+```{r}
+unique_countries_ghg_ems <- unique(ghg_ems$Country)
+unique_countries_world <- unique(world$Country)
+matched <- unique_countries_ghg_ems %in% unique_countries_world
+table(matched)
+```
+
+```{r}
+(unmatched_countries_ghg_ems <- unique_countries_ghg_ems[!matched])
+```
+
+```{r}
+(unmatched_country <- unmatched_countries_ghg_ems[1])
+unmatched_world_selection <- agrep(pattern = unmatched_country,
+                                  unique_countries_world,
+                                  max.distance = 10)
+unmatched_world_countries <- unique_countries_world[unmatched_world_selection]
+unmatched_world_countries
+```
+
+```{r}
+world$Country[world$Country %in% unmatched_world_countries] <- unmatched_countries_ghg_ems[1]
+```
+
+
+# 6.6 Working with databases
+
+## Exercises
+
+### q1
+
+```{r}
+data(land_df, package = "efficient")
+my_db <- src_sqlite("land.sqlite3", create = TRUE)
+land_sqlite <- copy_to(my_db, land_df, indexes = list("postcode", "price"))
+```
+
+```{r}
+class(land_sqlite)
+```
+
+```{r}
+tbl(my_db, sql('SELECT "price", "postcode", "old/new"  FROM land_df'))
+```
+
+```{r}
+select(land_sqlite, price, postcode, `old/new`)
+```
+
+# 6.7 Data processing with data.table
+
+```{r}
+data(wb_ineq)
+wb_ineq_dt <- data.table(wb_ineq) # convert to data.table class
+aus3a <- wb_ineq_dt[Country == "Australia"]
+aus3a
+```
+
+```{r}
+setkey(wb_ineq_dt, Country)
+aus3b <- wb_ineq_dt[.("Australia")]
+aus3b
+```
+

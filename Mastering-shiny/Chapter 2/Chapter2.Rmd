@@ -1,0 +1,233 @@
+---
+title: "Chapter2-Your first Shiny app"
+output: html_notebook
+---
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+```
+
+
+write "shinyapp" and then press shift + tab to use its snippets.
+
+# 2.2 Create app directory and file
+
+```{r}
+file.edit("app.R")
+```
+
+```{r}
+# two way to run an shiny app
+# 1
+source("app.R")
+# 2
+runApp()
+```
+
+```{r}
+ui <- fluidPage(
+  "Hello, world!"
+)
+server <- function(input, output, session) {
+}
+shinyApp(ui, server)
+```
+
+# 2.4 Adding UI controls
+
+```{r}
+
+ui <- fluidPage(
+  selectInput("dataset", label = "Dataset", choices = ls("package:datasets")),
+  verbatimTextOutput("summary"),
+  tableOutput("table")
+)
+server <- function(input, output, session) {
+}
+shinyApp(ui, server)
+```   
+
+
+# 2.5 Adding behavior
+
+```{r}
+ui <- fluidPage(
+  selectInput("dataset", label = "Dataset", choices = ls("package:datasets")),
+  verbatimTextOutput("summary"),
+  tableOutput("table")
+)
+
+server <- function(input, output, session) {
+  output$summary <- renderPrint({
+    dataset <- get(input$dataset, "package:datasets")
+    summary(dataset)
+  })
+  
+  output$table <- renderTable({
+    dataset <- get(input$dataset, "package:datasets")
+    dataset
+  })
+}
+shinyApp(ui, server)
+```
+
+we must give shiny the recipe for making the outputs and the pattern is like this:
+
+```{r}
+output$ID <- renderTYPE({
+  # Expression that generates whatever kind of output
+  # renderTYPE expects
+})
+```
+
+the render function `render*` and the output control of input `*Output` must be the same type.
+in this case we use `renderTable` to display the selected input and the render type matches with `tableOutput`.
+
+
+
+# 2.6 Reducing duplication with reactive expressions
+
+we can stop the duplication in code (`dataset <- get(input$dataset, "package:datasets")`) by a technique called "reactive expression" using `reactive()`.
+this technique retrieve the input once and caches the result until it needs to be updated.
+
+
+```{r}
+ui <- fluidPage(
+  selectInput("dataset", label = "Dataset", choices = ls("package:datasets")),
+  verbatimTextOutput("summary"),
+  tableOutput("table")
+)
+
+server <- function(input, output, session) {
+  dataset <- reactive({
+    get(input$dataset, "package:datasets")
+  })
+
+  output$summary <- renderPrint({
+    summary(dataset())
+  })
+  
+  output$table <- renderTable({
+    dataset()
+  })
+}
+
+shinyApp(ui, server)
+```
+
+
+# 2.8 Exercises
+
+question 1:
+```{r}
+library(shiny)
+
+ui <- fluidPage(textInput("name", "What's your name?"), textOutput("greeting"))
+
+server <- function(input, output, session) {
+  output$greeting <- renderText({
+  paste0("Hello ", input$name)
+})
+}
+
+shinyApp(ui, server)
+
+```
+
+question 2:
+
+```{r}
+
+ui <- fluidPage(
+  sliderInput("x", label = "If x is", min = 1, max = 50, value = 30),
+  "then x times 5 is",
+  textOutput("product")
+)
+
+server <- function(input, output, session) {
+  output$product <- renderText({ 
+    input$x * 5
+  })
+}
+shinyApp(ui, server)
+```
+
+
+
+question 3:
+
+```{r}
+
+ui <- fluidPage(
+  sliderInput("x", label = "If x is", min = 1, max = 50, value = 30),
+  sliderInput("y", label = "and y is", min = 1, max = 50, value = 30),
+  "then x times y is",
+  textOutput("product")
+)
+
+server <- function(input, output, session) {
+  output$product <- renderText({ 
+    input$x * input$y
+  })
+}
+shinyApp(ui, server)
+```
+
+
+question 4:
+
+```{r}
+ui <- fluidPage(
+  sliderInput("x", "If x is", min = 1, max = 50, value = 30),
+  sliderInput("y", "and y is", min = 1, max = 50, value = 5),
+  "then, (x * y) is", textOutput("product"),
+  "and, (x * y) + 5 is", textOutput("product_plus5"),
+  "and (x * y) + 10 is", textOutput("product_plus10")
+)
+
+server <- function(input, output, session) {
+  product <- reactive({ 
+    product <- input$x * input$y
+  })
+  output$product <- reactive({ 
+    product()
+  })
+  output$product_plus5 <- renderText({ 
+    product() + 5
+  })
+  output$product_plus10 <- renderText({ 
+    product() + 10
+  })
+}
+shinyApp(ui, server)
+```
+
+
+question 5:
+```{r}
+library(ggplot2)
+datasets <- data(package = "ggplot2")$results[c(2, 4, 10), "Item"]
+
+ui <- fluidPage(
+  selectInput("dataset", "Dataset", choices = datasets),
+  verbatimTextOutput("summary"),
+  plotOutput("plot")
+)
+
+server <- function(input, output, session) {
+  dataset <- reactive({
+    get(input$dataset, "package:ggplot2")
+  })
+  output$summry <- renderPrint({
+    summary(dataset())
+  })
+  output$plot <- renderPlot({
+    plot(dataset())
+  }, res = 96)
+}
+shinyApp(ui, server)
+```

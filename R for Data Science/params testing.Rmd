@@ -1,0 +1,43 @@
+---
+output: html_document
+params:
+  my_class: suv
+  start: !r lubridate::ymd("2015-01-01")
+  snapshot: !r lubridate::ymd_hms("2015-01-01 12:30:00")
+  vector: !r 1:5
+---
+
+```{r setup, include = FALSE}
+library(ggplot2)
+library(dplyr)
+
+class <- mpg %>% filter(class == params$my_class)
+```
+
+# Fuel economy for `r params$my_class`s
+
+```{r, message = FALSE}
+ggplot(class, aes(displ, hwy)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE)
+```
+
+# Printing Dates
+```{r}
+print(params$start)
+print(params$snapshot)
+print(params$vector)
+```
+
+
+```{r}
+reports <- tibble(
+  class = unique(mpg$class),
+  filename = stringr::str_c("fuel-economy-", class, ".html"),
+  params = purrr::map(class, ~ list(my_class = .))
+)
+reports
+```
+
+
+

@@ -1,0 +1,360 @@
+---
+title: "Chapter15 - Reactive building blocks"
+output: html_notebook
+---
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+reactiveConsole(TRUE)
+```
+
+
+
+# 15.1 Reactive values
+
+* single value, by `reactiveVal()`
+* a list of values, by `reactiveValues()`
+```{r}
+x <- reactiveVal(10)
+x()       # get
+x(20)     # set
+
+y <- reactiveValues(a = 1, b = 2)
+y$a       # get
+y$b <- 20 # set
+```
+
+
+the `input` is a special type of `reactiveValues` that is just read-only:
+
+```{r}
+ui <- fluidPage(
+  textInput("name", "name")
+)
+server <- function(input, output, session) {
+  input$name <- "Hadley"
+}
+shinyApp(ui, server)
+```
+
+
+
+
+
+```{r}
+# copy-on-modify
+a1 <- a2 <- 10
+a2 <- 20
+a1 # unchanged
+
+# reference semantic
+b1 <- b2 <- reactiveVal(10)
+b2(20)
+b1()
+```
+
+
+## 15.1.1 Exercises
+
+### question 1
+
+```{r}
+l1 <- reactiveValues(a = 1, b = 2)
+l2 <- list(a = reactiveVal(1), b = reactiveVal(2))
+
+l1$a
+l1$a <- "new_Val"
+
+l2$a()
+l2$a("new_Val")
+```
+
+
+
+### question 2
+
+```{r}
+#wrong: normal R variables, not reactive vals
+vals <- reactiveValues(a = 1, b = 2)
+c <- vals$a
+c <- "new"
+vals$a
+
+
+vals <- reactiveValues(a = 1, b = 2)
+c <- vals$a
+vals$a <- "new"
+c
+
+
+vals <- reactiveValues(a = 1, b = 2)
+vals2 <- vals
+vals2$a <- "new"
+vals$a
+vals$b <- "abc"
+vals2$b
+```
+
+
+
+# 15.2 Reactive expressions
+
+## 15.2.1 Errors
+
+the cache the error, just like the values:
+
+```{r}
+r <- reactive(stop("Error occured at ", Sys.time(), call. = FALSE))
+r()
+Sys.sleep(2)
+r()
+```
+
+## 15.2.3 Exercises
+
+### question 1
+
+```{r}
+reactlog::reactlog_enable()
+```
+
+```{r}
+ui <- fluidPage(
+  checkboxInput("error", "error?"),
+  textOutput("result")
+)
+server <- function(input, output, session) {
+  a <- reactive({
+    if (input$error) {
+      stop("Error!")
+    } else {
+      1
+    }
+  })
+  b <- reactive(a() + 1)
+  c <- reactive(b() + 1)
+  output$result <- renderText(c())
+}
+shinyApp(ui, server)
+```
+
+```{r}
+reactlogShow()
+```
+
+### question 2
+
+```{r}
+reactlog::reactlog_enable()
+```
+
+```{r}
+ui <- fluidPage(
+  checkboxInput("error", "error?"),
+  textOutput("result")
+)
+server <- function(input, output, session) {
+  a <- reactive({
+    req(!input$error)
+      1
+  })
+  b <- reactive(a() + 1)
+  c <- reactive(b() + 1)
+  output$result <- renderText(c())
+}
+shinyApp(ui, server)
+```
+
+```{r}
+reactlogShow()
+```
+
+
+# 15.3 Observers
+
+the observer runs immediately when you create it. so the reactive expressions will be evaluated.
+
+observers use for their side-effects.
+
+
+```{r}
+y <- reactiveVal(10)
+observe({
+  message("`y` is ", y())
+})
+
+y(5)
+y(4)
+```
+
+
+## 15.3.1 Nesting observers
+
+```{r}
+x <- reactiveVal(1)
+y <- observe({
+  x()
+  observe(print(x()))
+})
+x(2)
+x(3)
+```
+
+
+## 15.3.2 isolate()
+
+```{r}
+count <- reactiveVal(0)
+x <- reactiveVal(1)
+observe({
+  x()
+  count(count() + 1)
+})
+```
+
+solution (removing the dependency to `count` itself):
+```{r}
+count <- reactiveVal(0)
+x <- reactiveVal(1)
+observe({
+  x()
+  isolate(count(count() + 1))
+})
+
+x(1)
+x(2)
+count()
+x(3)
+count()
+```
+
+## 15.3.3 Exercises
+
+### question 1
+
+```{r}
+library(shiny)
+
+ui <- fluidPage(
+  numericInput("x", "x", value = 50, min = 0, max = 100),
+  actionButton("capture", "capture"),
+  textOutput("out")
+)
+
+server <- function(input, output, session) {
+
+  output$out <- renderText({
+    input$capture
+    isolate(input$x)
+  })
+}
+
+shinyApp(ui, server)
+```
+
+## 15.3.4 observeEvent()
+`observeEvent(x, y)` is equivalent to `observe({isolate(x); y})`.
+
+```{r}
+count <- reactiveVal(0)
+x <- reactiveVal(1)
+observeEvent(x(), {
+  count(count() + 1)
+})
+x(1)
+x(2)
+count()
+x(3)
+count()
+```
+
+# 15.4 Timed invalidation
+
+
+```{r}
+x <- reactive({
+  invalidateLater(500)
+  rnorm(10)
+})
+```
+
+
+
+```{r}
+sum <- reactiveVal(0)
+observe({
+  invalidateLater(300)
+  sum(isolate(sum()) + runif(1))
+})
+```
+
+## 15.4.1 Polling
+```{r}
+data <- reactive({
+  on.exit(invalidateLater(1000))
+  read.csv("data.csv")
+})
+```
+
+```{r}
+server <- function(input, output, session) {
+  data <- reactivePoll(1000, session, 
+    function() file.mtime("data.csv"),
+    function() read.csv("data.csv")
+  )
+}
+```
+
+```{r}
+server <- function(input, output, session) {
+  data <- reactiveFileReader(1000, session, "data.csv", read.csv)
+}
+```
+
+## 15.4.2 Long running reactives
+
+```{r}
+x <- reactive({
+  invalidateLater(500)
+  Sys.sleep(1)
+  10
+})
+```
+
+## 15.4.3 Timer accuracy
+```{r}
+velocity <- 3
+distance <- reactiveVal(1)
+
+last <- proc.time()[[3]]
+observe({
+  cur <- proc.time()[[3]]
+  time <- last - cur
+  last <<- cur
+  
+  distance(isolate(distance()) + velocity * time)
+  invalidateLater(100)
+})
+```
+
+## 15.4.4 Exercises
+### question 1
+
+```{r}
+ui <- fluidPage(
+  textOutput("text")
+)
+server <- function(input, output, session) {
+  x <- reactive({
+    invalidateLater(500)
+    rnorm(10) ## use big number for better understanding
+  }) 
+  output$text <- renderText(x())
+}
+shinyApp(ui, server)
+```

@@ -1,0 +1,34 @@
+---
+output: html_document
+# bibliography: rmarkdown.bib
+---
+
+> it needs a bibliography file to run.
+
+
+example
+------------------------------
+Separate multiple citations with a `;`: Blah blah [@smith04; @doe99].
+
+
+You can add arbitrary comments inside the square brackets: 
+Blah blah [see @doe99, pp. 33-35; also @smith04, ch. 1].
+
+
+Remove the square brackets to create an in-text citation: @smith04 
+says blah, or @smith04 [p. 33] says blah.
+
+
+Add a `-` before the citation to suppress the author's name: 
+Smith says blah [-@smith04].
+
+
+----------------------------------
+You can change the style of your citations and bibliography by referencing a CSL (citation style language) file in the csl field:
+bibliography: rmarkdown.bib
+csl: apa.csl
+
+
+> or you can use it in this way:
+
+# Bibliography

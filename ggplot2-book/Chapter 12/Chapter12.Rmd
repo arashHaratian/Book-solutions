@@ -1,0 +1,44 @@
+---
+title: "Chapter12 - Other aesthetics"
+output: html_notebook
+---
+
+
+# 12.1 Size
+
+```{r}
+base <- ggplot(mpg, aes(displ, hwy, size = cyl)) + 
+  geom_point()
+
+base
+base + scale_size(range = c(1, 2))
+```
+
+```{r}
+planets <- planets %>% filter(Name %in% c("mercury", "Venus", "Earth", "Mars", "Jupiter", "Satur", "Uranus", "Neptune"))
+
+```
+
+```{r}
+base <- ggplot(planets, aes(1, Name, size = `Radius (RJ)`)) + 
+  geom_point() + 
+  scale_x_continuous(breaks = NULL) + 
+  labs(x = NULL, y = NULL, size = NULL)
+  
+base + ggtitle("not to scale")
+base + 
+  scale_radius(limits = c(0, NA), range = c(0, 10)) + 
+  ggtitle("to scale")
+```
+
+
+# 12.5 Identity scales
+```{r}
+head(luv_colours)
+
+ggplot(luv_colours, aes(u, v)) + 
+geom_point(aes(colour = col), size = 3) + 
+scale_color_identity() + 
+coord_equal()
+```
+

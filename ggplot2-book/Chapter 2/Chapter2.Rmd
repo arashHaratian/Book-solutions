@@ -1,0 +1,472 @@
+---
+title: "Chapter2 - First steps"
+output: html_notebook
+---
+
+# 2.2 Fuel economy data
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+mpg
+```
+
+## 2.2.1 Exercises
+
+### question1
+
+```{r}
+?mpg
+summary(mpg)
+```
+* summary
+* ?mpg
+* str(mpg) / dplyr::glimps(mpg)
+* View(mpg)
+* head(mpg)
+* dim(mpg)
+* names(mpg)
+
+
+### question 4
+
+```{r}
+mpg %>% 
+  group_by(manufacturer) %>% 
+  summarise(n()) %>% 
+  arrange(desc(`n()`))
+```
+
+```{r}
+mpg$model %>% 
+  unique()
+
+mpg %>% 
+  mutate(model = str_replace_all(model, c("quattro" = "", "4wd" = "", "2wd" = "", "awd" = ""))) %>% 
+  group_by(manufacturer, model) %>% 
+  summarise(n())
+```
+
+# 2.3 Key components
+
+3 key components are :
+
+1- **data**: mpg
+2- **aesthetic mappings**: `displ` to x and `hwy` to y
+3- **geom(s)** : points
+
+```{r}
+ggplot(mpg, aes(x = displ, y = hwy)) + 
+  geom_point()
+```
+
+## 2.3.1 Exercises
+
+### question 2
+
+```{r}
+ggplot(mpg, aes(manufacturer, model)) +
+  geom_point()
+```
+### question 3
+
+```{r}
+ggplot(mpg, aes(cty, hwy)) + geom_point()
+ggplot(diamonds, aes(carat, price)) + geom_point()
+ggplot(economics, aes(date, unemploy)) + geom_line()
+ggplot(mpg, aes(cty)) + geom_histogram()
+```
+
+# 2.4 Colour, size, shape and other aesthetic attributes
+
+```{r}
+aes(displ, hwy, colour = class)
+aes(displ, hwy, shape = drv)
+aes(displ, hwy, size = cyl)
+```
+
+```{r}
+ggplot(mpg, aes(displ, hwy, colour = class)) + 
+  geom_point()
+```
+
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + geom_point(aes(colour = "blue"))
+ggplot(mpg, aes(displ, hwy)) + geom_point(colour = "blue")
+```
+in the first plot the `blue` scaled to the orange colour, but in the second one all points have the blue colour.
+
+> Instead of trying to make one very complex plot that shows everything at once, see if you can create a series of simple plots that tell a story, leading the reader from ignorance to knowledge.
+
+## 2.4.1 Exercises
+
+
+### question 1
+
+```{r}
+ggplot(mpg, aes(displ, hwy, colour = cty)) + geom_point()
+ggplot(mpg, aes(displ, hwy, shape = drv)) + geom_point()
+ggplot(mpg, aes(displ, hwy, colour = manufacturer, shape = drv)) + geom_point()
+```
+
+
+### question 2
+
+```{r}
+ggplot(mpg, aes(displ, hwy, shape = cty)) + geom_point()
+```
+```{r}
+ggplot(mpg, aes(displ, hwy, shape = trans)) + geom_point()
+```
+
+### question 3
+```{r}
+ggplot(mpg, aes(drv, hwy)) + geom_point()
+ggplot(mpg, aes(drv, hwy)) + geom_boxplot()
+ggplot(mpg, aes(drv, displ, color = class)) + geom_point()
+ggplot(mpg, aes(drv, displ, color = class)) + geom_boxplot()
+```
+
+# 2.5 Faceting
+
+to simplified the plot with many category for one variable.
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  facet_wrap(~class)
+```
+
+## 2.5.1 Exercises
+
+### question 1
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  facet_wrap(~hwy)
+```
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  facet_wrap(~cyl)
+```
+
+
+### question 2
+
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  facet_wrap(~cyl)
+
+ggplot(mpg, aes(cyl, displ)) + 
+  geom_point() + 
+  facet_wrap(~hwy)
+
+ggplot(mpg, aes(cyl, hwy)) + 
+  geom_point() + 
+  facet_wrap(~displ)
+```
+
+### question 3
+
+```{r}
+?facet_wrap()
+```
+
+### question 4
+
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  facet_wrap(~cyl, scales = "free")
+
+ggplot(mpg, aes(cyl, displ)) + 
+  geom_point() + 
+  facet_wrap(~hwy, scales = "free")
+
+ggplot(mpg, aes(cyl, displ)) + 
+  geom_point() + 
+  facet_wrap(~hwy, scales = "free_x")
+```
+
+
+# 2.6 Plot geoms
+
+## 2.6.1 Adding a smoother to a plot
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  geom_smooth()
+```
+
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  geom_smooth(span = 0.2)
+
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  geom_smooth(span = 1)
+```
+
+
+```{r}
+library(mgcv)
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  geom_smooth(method = "gam", formula = y ~ s(x))
+```
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
+```
+
+```{r}
+library(MASS)
+ggplot(mpg, aes(displ, hwy)) + 
+  geom_point() + 
+  geom_smooth(method = "rlm")
+
+```
+
+## 2.6.2 Boxplots and jittered points
+
+```{r}
+ggplot(mpg, aes(drv, hwy)) + 
+  geom_point()
+```
+
+```{r}
+ggplot(mpg, aes(drv, hwy)) + geom_jitter()
+ggplot(mpg, aes(drv, hwy)) + geom_boxplot()
+ggplot(mpg, aes(drv, hwy)) + geom_violin()
+```
+
+
+## 2.6.3 Histograms and frequency polygons
+
+```{r}
+ggplot(mpg, aes(hwy)) + geom_histogram()
+ggplot(mpg, aes(hwy)) + geom_freqpoly()
+```
+
+if you want bins with different sizes, use `break` argument.
+
+```{r}
+ggplot(mpg, aes(hwy)) + 
+  geom_freqpoly(binwidth = 2.5)
+ggplot(mpg, aes(hwy)) + 
+  geom_freqpoly(binwidth = 1)
+```
+
+
+An alternative to the frequency polygon is the density plot, `geom_density()`. they are harder to interpret since the underlying computations are more complex. They also make assumptions that are not true for all data, namely that the underlying distribution is continuous, unbounded, and smooth.
+
+
+```{r}
+ggplot(mpg, aes(displ, colour = drv)) + 
+  geom_freqpoly(binwidth = 0.5)
+ggplot(mpg, aes(displ, fill = drv)) + 
+  geom_histogram(binwidth = 0.5) + 
+  facet_wrap(~drv, ncol = 1)
+```
+
+## 2.6.4 Bar charts
+
+```{r}
+ggplot(mpg, aes(manufacturer)) + 
+  geom_bar()
+```
+
+
+```{r}
+drugs <- data.frame(
+  drug = c("a", "b", "c"),
+  effect = c(4.2, 9.7, 6.1)
+)
+```
+
+```{r}
+ggplot(drugs, aes(drug, effect)) + geom_bar(stat = "identity")
+ggplot(drugs, aes(drug, effect)) + geom_point()
+```
+
+## 2.6.5 Time series with line and path plots
+path joins the points in order that they appear in the dataset.
+but line joins them from left to right
+
+```{r}
+ggplot(economics, aes(date, unemploy / pop)) +
+  geom_line()
+ggplot(economics, aes(date, uempmed)) +
+  geom_line()
+```
+
+```{r}
+ggplot(economics, aes(unemploy / pop, uempmed)) + 
+  geom_path() +
+  geom_point()
+
+year <- function(x) as.POSIXlt(x)$year + 1900
+ggplot(economics, aes(unemploy / pop, uempmed)) + 
+  geom_path(colour = "grey50") +
+  geom_point(aes(colour = year(date)))
+```
+
+## 2.6.6 Exercises
+
+### question 1
+
+```{r}
+ggplot(mpg, aes(cty, hwy)) + 
+  geom_point() +
+  geom_smooth() +
+  geom_jitter()
+```
+
+
+### question 2
+
+```{r}
+ggplot(mpg, aes(class, hwy)) + geom_boxplot()
+```
+
+```{r}
+ggplot(mpg, aes(reorder(class, hwy), hwy)) + geom_boxplot()
+?reorder
+```
+
+### question 3
+
+```{r}
+ggplot(diamonds, aes(carat)) +
+  geom_freqpoly(bins = 70)
+
+ggplot(diamonds, aes(carat)) +
+  geom_histogram(bins = 100)
+```
+
+### question 4  /  5
+
+```{r}
+ggplot(diamonds, aes(cut, price)) +
+  geom_bar(stat = "identity")
+
+ggplot(diamonds, aes(price, color = cut)) +
+  geom_histogram(position = "dodge")
+```
+
+```{r}
+ggplot(diamonds, aes(x = price)) +
+  geom_histogram(bins = 100) +
+  facet_wrap(~cut)
+```
+
+
+```{r}
+ggplot(diamonds, aes(x = price, color = cut)) +
+  geom_freqpoly(binwidth = 100)
+
+ggplot(diamonds, aes(x = price, y = ..density..,  color = cut)) +
+  geom_freqpoly(binwidth = 100)
+```
+
+###question 6
+```{r}
+?geom_bar()
+```
+
+### question 7
+
+for `model` and `manufacturer`
+```{r}
+ggplot(mpg, aes(colour = model, manufacturer)) +
+  geom_bar()
+```
+
+```{r}
+ggplot(mpg, aes(manufacturer, model, colour = manufacturer)) +
+  geom_point() 
+```
+
+# 2.7 Modifying the axes
+
+
+`xlab()` and `ylab()` modify the x- and y-axis labels:
+```{r}
+ggplot(mpg, aes(cty, hwy)) +
+  geom_point(alpha = 1 / 3)
+
+ggplot(mpg, aes(cty, hwy)) +
+  geom_point(alpha = 1 / 3) + 
+  xlab("city driving (mpg)") + 
+  ylab("highway driving (mpg)")
+
+# Remove the axis labels with NULL
+ggplot(mpg, aes(cty, hwy)) +
+  geom_point(alpha = 1 / 3) + 
+  xlab(NULL) + 
+  ylab(NULL)
+```
+
+
+`xlim()` and `ylim()` modify the limits of axes:
+
+```{r}
+ggplot(mpg, aes(drv, hwy)) +
+  geom_jitter(width = 0.25)
+
+ggplot(mpg, aes(drv, hwy)) +
+  geom_jitter(width = 0.25) + 
+  xlim("f", "r") + 
+  ylim(20, 30)
+#> Warning: Removed 139 rows containing missing values (geom_point).
+  
+# For continuous scales, use NA to set only one limit
+ggplot(mpg, aes(drv, hwy)) +
+  geom_jitter(width = 0.25, na.rm = TRUE) + 
+  ylim(NA, 30)
+```
+
+the values outside of the plot become `NA` and if your plot uses summary stat, these `NA`s will be counted.
+
+# 2.8 Output
+you can bind the plot to a name and then:
+
+* print it:
+```{r}
+p <- ggplot(mpg, aes(displ, hwy, colour = factor(cyl))) +
+  geom_point()
+p
+# print(p)
+```
+
+* save it on disk:
+```{r}
+# Save png to disk
+ggsave("plot.png", p, width = 5, height = 5)
+```
+
+
+* make a summary:
+```{r}
+summary(p)
+```
+
+* Save a cached copy of it to disk, with `saveRDS()`. This saves a complete copy of the plot object, so you can easily re-create it with `readRDS()`.
+
+```{r}
+saveRDS(p, "plot.rds")
+q <- readRDS("plot.rds")
+print(q)
+```

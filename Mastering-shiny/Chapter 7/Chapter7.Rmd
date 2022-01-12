@@ -1,0 +1,508 @@
+---
+title: "Chapter7 - Graphics"
+output: html_notebook
+---
+
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+library(ggplot2)
+```
+
+
+
+
+# 7.1 Interactivity
+
+## 7.1.1 Basics
+the mouse events for plots in `plotOutput()`:
+
+* `click`
+* `dblclick` (double click)
+* `hover` (when the mouse stays in the same place for a little while)
+* `brush` (a rectangular selection tool)
+
+
+
+you can use this arguments in this way:
+
+```{r}
+plotOutput("plot", click = "plot_click")
+```
+and the access the value by using `input$plot_click`
+
+example:
+```{r}
+ui <- basicPage(
+  plotOutput("plot", click = "plot_click"),
+  verbatimTextOutput("info")
+)
+
+server <- function(input, output) {
+  output$plot <- renderPlot({
+    plot(mtcars$wt, mtcars$mpg)
+  }, res = 96)
+
+  output$info <- renderPrint({
+    req(input$plot_click)
+    x <- round(input$plot_click$x, 2)
+    y <- round(input$plot_click$y, 2)
+    cat("[", x, ", ", y, "]", sep = "")
+  })
+}
+shinyApp(ui, server)
+```
+## 7.1.2 Clicking
+
+example of `nearPoint()`:
+
+```{r}
+ui <- fluidPage(
+  plotOutput("plot", click = "click"),
+  tableOutput("data")
+)
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    plot(mtcars$wt, mtcars$mpg)
+  }, res = 96)
+  
+  output$data <- renderTable({
+    nearPoints(mtcars, input$click, xvar = "wt", yvar = "mpg")
+  })
+}
+shinyApp(ui, server)
+```
+
+`nearPoint()` takes 4 arguments: the dataframe that underlies the plot, input event, and the column names of the dataframe that used in the x and y axes.
+
+
+these two last arguments are not important if you use ggplot:
+
+```{r}
+ui <- fluidPage(
+  plotOutput("plot", click = "plot_click"),
+  tableOutput("data")
+)
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    ggplot(mtcars, aes(wt, mpg)) + geom_point()
+  }, res = 96)
+  
+  output$data <- renderTable({
+    nearPoints(mtcars, input$plot_click)
+  })
+}
+shinyApp(ui, server)
+```
+
+two more argument:
+```{r}
+ui <- fluidPage(
+  plotOutput("plot", click = "plot_click"),
+  tableOutput("data")
+)
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    ggplot(mtcars, aes(wt, mpg)) + geom_point()
+  }, res = 96)
+  
+  output$data <- renderTable({
+    nearPoints(mtcars, input$plot_click, allRows = TRUE, addDist = TRUE)
+  })
+}
+shinyApp(ui, server)
+```
+
+## 7.1.3 Other point events
+
+you can use other arguments `dbclick`, `hover` instead of `click`.
+if you want more options of these three events, use  `clickOpts()`, `dblclickOpts()`, or `hoverOpts()` instead of the input id.
+
+
+## 7.1.4 Brushing
+
+```{r}
+ui <- fluidPage(
+  plotOutput("plot", brush = "plot_brush"),
+  tableOutput("data")
+)
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    ggplot(mtcars, aes(wt, mpg)) + geom_point()
+  }, res = 96)
+  
+  output$data <- renderTable({
+    brushedPoints(mtcars, input$plot_brush)
+  })
+}
+shinyApp(ui, server)
+```
+
+## 7.1.5 Modifying the plot
+
+```{r}
+df <- data.frame(x = rnorm(100), y = rnorm(100))
+
+ui <- fluidPage(
+  plotOutput("plot", click = "plot_click")
+)
+server <- function(input, output, session) {
+  dist <- reactiveVal(rep(1, nrow(df)))
+  observeEvent(input$plot_click,
+    dist(nearPoints(df, input$plot_click, allRows = TRUE, addDist = TRUE)$dist_)  
+  )
+  
+  output$plot <- renderPlot({
+    df$dist <- dist()
+    ggplot(df, aes(x, y, size = dist)) + 
+      geom_point() + 
+      scale_size_area(limits = c(0, 1000), max_size = 10, guide = NULL)
+  })
+}
+shinyApp(ui, server)
+```
+
+
+```{r}
+ui <- fluidPage(
+  plotOutput("plot", brush = "plot_brush"),
+  tableOutput("data")
+)
+server <- function(input, output, session) {
+  selected <- reactiveVal(rep(TRUE, nrow(mtcars)))
+
+  observeEvent(input$plot_brush, {
+    brushed <- brushedPoints(mtcars, input$plot_brush, allRows = TRUE)$selected_
+    selected(ifelse(brushed, !selected(), selected()))
+  })
+
+  output$plot <- renderPlot({
+    mtcars$sel <- selected()
+    ggplot(mtcars, aes(wt, mpg)) + 
+      geom_point(aes(colour = sel)) +
+      scale_colour_discrete(limits = c("TRUE", "FALSE"))
+  }, res = 96)
+ 
+}
+shinyApp(ui, server)
+```
+
+
+# 7.2 Theming
+
+the first way:
+
+```{r}
+library(thematic)
+thematic_on(bg = "#222222", fg = "white", accent = "#0CE3AC")
+
+library(ggplot2)
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() +
+  geom_smooth()
+```
+
+These settings will affect all ggplot2, lattice, and base plots until you call `thematic_off()`.
+
+second way:
+(automatically determine all of the settings from the theme associated with your Shiny app)
+```{r}
+thematic_on(font = "auto")
+```
+
+
+# 7.3 Dynamic height and width
+you can make plot size reactive, so it resizes in response to user actions. To do this, supply zero-argument functions to the width and height arguments:
+
+```{r}
+ui <- fluidPage(
+  sliderInput("height", "height", min = 100, max = 500, value = 250),
+  sliderInput("width", "width", min = 100, max = 500, value = 250),
+  sliderInput("n", "n", min = 10, max = 100, value = 25),
+  plotOutput("plot", width = 250, height = 250)
+)
+server <- function(input, output, session) {
+  output$plot <- renderPlot(
+    width = function() input$width,
+    height = function() input$height,
+    res = 96,
+    {
+      plot(rnorm(input$n), rnorm(input$n))
+    }
+  )
+}
+shinyApp(ui, server)
+```
+# 7.4 Cached plots
+to use cached plots, changing `renderPlot()` to `renderCachedPlot()` then use “cache key” which determines when the cache is used.
+```{r}
+ui <- fluidPage(
+  selectInput("x", "X", choices = names(diamonds), selected = "carat"),
+  selectInput("y", "Y", choices = names(diamonds), selected = "price"),
+  plotOutput("diamonds")
+)
+
+server <- function(input, output, session) {
+  output$diamonds <- renderCachedPlot({
+    ggplot(diamonds, aes(.data[[input$x]], .data[[input$y]])) + 
+      geom_point()
+  },
+  cacheKeyExpr = list(input$x, input$y))
+}
+shinyApp(ui, server)
+```
+
+
+this caches will be shared across users.
+same plot with different size can not be restored from the cached plots.
+
+
+# 7.5 Images
+
+```{r}
+puppies <- tibble::tribble(
+  ~breed, ~ id, ~author, 
+  "corgi", "eoqnr8ikwFE","alvannee",
+  "labrador", "KCdYn0xu2fU", "shaneguymon",
+  "spaniel", "TzjMd7i5WQI", "_redo_"
+)
+
+ui <- fluidPage(
+  selectInput("id", "Pick a breed", choices = setNames(puppies$id, puppies$breed)),
+  htmlOutput("source"),
+  imageOutput("photo")
+)
+server <- function(input, output, session) {
+  output$photo <- renderImage({
+    list(
+      src = file.path("puppy-photos", paste0(input$id, ".jpg")),
+      contentType = "image/jpeg",
+      width = 500,
+      height = 650
+    )
+  }, deleteFile = FALSE)
+  
+  output$source <- renderUI({
+    info <- puppies[puppies$id == input$id, , drop = FALSE]
+    HTML(glue::glue("<p>
+      <a href='https://unsplash.com/photos/{info$id}'>original</a> by
+      <a href='https://unsplash.com/@{info$author}'>{info$author}</a>
+    </p>"))
+  })
+}
+shinyApp(ui, server)
+```
+
+
+# 7.6 Exercises
+
+### question 1
+```{r}
+library(shiny)
+library(ggplot2)
+
+ui <- fluidPage(
+  plotOutput("plot", click = "plot_click"),
+  tableOutput("data")
+)
+
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    ggplot(mtcars, aes(wt, mpg)) + geom_point()
+  }, res = 96)
+  
+  output$data <- renderTable({
+    nearPoints(mtcars, input$plot_click, allRows = TRUE)
+  })
+}
+
+shinyApp(ui, server)
+```
+
+
+### question 2
+```{r}
+library(shiny)
+
+ui <- fluidPage(
+  titlePanel("question2"),
+  sidebarLayout(
+    sidebarPanel(
+      tableOutput("on_click"),
+      tableOutput("on_dblclick"),
+      tableOutput("on_hover"),
+      tableOutput("on_brush")
+    ),
+    mainPanel(
+      plotOutput("plot",
+                 click = "plot_click",
+                 dblclick = "plot_dblclick",
+                 hover = "plot_hover",
+                 brush = "plot_brush")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    ggplot(mtcars, aes(wt, mpg)) +
+      geom_point()
+  })
+  output$on_click <- renderTable({
+    nearPoints(mtcars, input$plot_click)
+  })
+  
+  output$on_dblclick <- renderTable({
+    nearPoints(mtcars, input$plot_dblclick)
+  })
+  
+  output$on_hover <- renderTable({
+    nearPoints(mtcars, input$plot_hover)
+  })
+    output$on_click <- renderTable({
+    nearPoints(mtcars, input$plot_click)
+  })
+}
+
+shinyApp(ui, server)
+```
+
+
+```{r}
+
+library(shiny)
+
+ui <- fluidPage(
+  titlePanel("question2"),
+  sidebarLayout(
+    sidebarPanel(
+       width = 6,
+      dataTableOutput("on_click"),
+      dataTableOutput("on_dblclick"),
+      dataTableOutput("on_hover"),
+      dataTableOutput("on_brush")
+    ),
+    mainPanel(
+      width = 6,
+      plotOutput("plot",
+                 click = "plot_click",
+                 dblclick = "plot_dblclick",
+                 hover = "plot_hover",
+                 brush = "plot_brush")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    ggplot(mtcars, aes(wt, mpg)) +
+      geom_point()
+  }, res = 96)
+  output$on_click <- renderDataTable({
+    nearPoints(mtcars, input$plot_click)
+  }, options = list(searching = FALSE))
+  
+  output$on_dblclick <- renderDataTable({
+    nearPoints(mtcars, input$plot_dblclick)
+  },options = list(searching = FALSE))
+  
+  output$on_hover <- renderDataTable({
+    nearPoints(mtcars, input$plot_hover)
+  }, options = list(searching = FALSE))
+  
+  output$on_brush <- renderDataTable({
+    brushedPoints(mtcars, input$plot_brush)
+  }, options = list(searching = FALSE))
+}
+
+shinyApp(ui, server)
+
+```
+
+
+### question 3
+
+
+```{r}
+df <- data.frame(x = rnorm(100), y = rnorm(100))
+
+ui <- fluidPage(
+  plotOutput("plot", click = "plot_click"),
+  textOutput("Wsize_text"),
+  textOutput("Hsize_text")
+)
+server <- function(input, output, session) {
+  dist <- reactiveVal(rep(1, nrow(df)))
+  observeEvent(input$plot_click,
+    dist(nearPoints(df, input$plot_click, allRows = TRUE, addDist = TRUE)$dist_)  
+  )
+  
+  output$plot <- renderPlot({
+    df$dist <- dist()
+    ggplot(df, aes(x, y, size = dist)) + 
+      geom_point() + 
+      scale_size_area(limits = c(0, 1000), max_size = 10, guide = NULL)
+  })
+  output$Wsize_text <- renderText(session$clientData[[paste0("output_", "plot", "_width")]])
+  output$Hsize_text <- renderText(session$clientData[[paste0("output_", "plot", "_width")]])
+  output_size <- function(id) {
+    reactive(c(
+      session$clientData[[paste0("output_", id, "_width")]],
+      session$clientData[[paste0("output_", id, "_height")]]
+    ))
+  }
+  output_size("plot")
+}
+
+shinyApp(ui, server)
+```
+
+```{r}
+library(shiny)
+library(ggplot2)
+
+df <- data.frame(x = rnorm(100), y = rnorm(100))
+
+ui <- fluidPage(
+  plotOutput("plot", click = "plot_click"),
+  textOutput("width"),
+  textOutput("height"),
+  textOutput("scale")
+)
+
+server <- function(input, output, session) {
+  
+  # Save the plot's widht and height.
+  width <- reactive(session$clientData[["output_plot_width"]])
+  height <- reactive(session$clientData[["output_plot_height"]])
+  
+  # Print the plot's width, the plot's height, and the suggested scale limits.
+  output$width <- renderText(paste0("Plot's width: ", width()))
+  output$height <- renderText(paste0("Plot's height: ", height()))
+  output$scale <- renderText({
+    paste0("Recommended limits: (0, ", max(height(), width()), ")")
+  })
+  
+  # Store the distance computed by the click event.
+  dist <- reactiveVal(rep(1, nrow(df)))
+  
+  # Update the dist reactive as needed.
+  observeEvent(input$plot_click, {
+    req(input$plot_click)
+    dist(nearPoints(df, input$plot_click, allRows = TRUE, addDist = TRUE)$dist_)
+  })
+  
+  output$plot <- renderPlot({
+    df$dist <- dist()
+    ggplot(df, aes(x, y, size = dist)) +
+      geom_point()
+  })
+}
+
+shinyApp(ui, server)
+```

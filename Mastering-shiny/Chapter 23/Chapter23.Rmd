@@ -1,0 +1,112 @@
+---
+title: "Chapter23 - Performance"
+output: html_notebook
+---
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+```
+
+
+# 23.2 Benchmark
+
+The benchmarking process is supported by the `shinyloadtest` package and has three basic steps:
+
+1. Record a script simulating a typical user with `shinyloadtest::record_session()`.
+
+2. Replay the script with multiple simultaneous users with the `shinycannon` command-line tool.
+
+3. Analyse the results using `shinyloadtest::report()`.
+
+
+## 23.2.1 Recording
+
+open two R sessions:
+
+start the app in the first session
+```{r}
+runApp("myapp.R")
+```
+
+
+in the second session run this:
+```{r}
+shinyloadtest::record_session("http://127.0.0.1:7716")
+```
+
+
+## 23.2.2 Replay
+
+
+```{cmd}
+shinycannon recording.log http://127.0.0.1:7911 \
+  --workers 10 \
+  --loaded-duration-minutes 5 \
+  --output-dir run1
+```
+
+```{cmd}
+java -jar shinycannon-1.0.0-9b22a92.jar recording.log http://127.0.0.1:7483
+```
+
+
+## 23.2.3 Analysis
+
+```{r}
+library(shinyloadtest)
+df <- load_runs("test-logs-2020-12-23T10_16_12.479Z/")
+```
+
+
+```{r}
+shinyloadtest_report(df, "report.html")
+```
+
+
+# 23.3 Profiling
+
+## 23.3.1 The flame graph
+
+```{r}
+f <- function() {
+  pause(0.2)
+  g()
+  h()
+  10
+}
+g <- function() {
+  pause(0.1)
+  h()
+}
+h <- function() {
+  pause(0.3)
+}
+```
+
+## 23.3.2 Profiling R code
+
+```{r}
+library(profvis)
+profvis(f())
+```
+
+## 23.3.3 Profiling a Shiny app
+
+```{r}
+ui <- fluidPage(
+  actionButton("x", "Push me"),
+  textOutput("y")
+)
+server <- function(input, output, session) {
+  output$y <- eventReactive(input$x, f())
+}
+
+profvis::profvis(runApp(shinyApp(ui, server)))
+```
+`Sys.sleep()` asks the operating system to “park” the process for some amount of time, so R is not actually running. This is why we had to use `profvis::pause()` above.
+

@@ -1,0 +1,177 @@
+---
+title: "Chapter5 - Efficient input/output"
+output: html_notebook
+---
+
+```{r}
+library("rio")
+library("readr")
+library("data.table")
+library("feather")
+library("WDI")
+```
+
+
+# 5.2 Versatile data import with rio
+
+```{r}
+# Specify a file
+fname <- system.file("extdata/voc_voyages.tsv", package = "efficient")
+# Import the file (uses the fread function from data.table)
+voyages <- import(fname)
+# Export the file as an Excel spreadsheet
+export(voyages, "./voc_voyages.xlsx")
+```
+
+```{r}
+file.remove("./voc_voyages.xlsx")
+```
+
+```{r}
+capitals <- import("https://github.com/mledoze/countries/raw/master/countries.json")
+```
+
+## Exercises
+
+### q2
+```{r}
+export(voyages, "voyages.tsv")
+export(voyages, "voyages.json")
+export(voyages, "voyages.rda")
+file.remove("voyages.json", "voyages.tsv", "voyages.rda")
+```
+
+### q3
+
+```{r}
+microbenchmark::microbenchmark(
+  export(voyages, "voyages.tsv"),
+  export(voyages, "voyages.json"),
+  export(voyages, "voyages.rda"))
+```
+
+
+```{r}
+export(voyages, "voyages.tsv")
+export(voyages, "voyages.json")
+export(voyages, "voyages.rda")
+
+file.size("voyages.rda")
+file.size("voyages.tsv")
+file.size("voyages.json")
+```
+
+```{r}
+file.remove("voyages.json", "voyages.tsv", "voyages.rda")
+```
+
+# 5.3 Plain text formats
+
+
+```{r, eval=F}
+# data is not available!
+fname <- system.file("extdata/", package = "efficient")
+df_co2 <- read.csv(fname)
+df_co2_dt <- data.table::fread(fname) 
+df_co2_readr <- readr::read_csv(fname)
+```
+## 5.3.1 Differences between fread() and read_csv()
+
+
+```{r}
+fname <- system.file("extdata/voc_voyages.tsv", package = "efficient")
+voyages_base <- read.delim(fname)
+```
+
+```{r}
+voyages_readr <- readr::read_tsv(fname)
+```
+
+```{r}
+voyages_base$hired[1023]
+
+voyages_readr$hired[1023] 
+```
+
+```{r}
+voyages_dt <- data.table::fread(fname)
+```
+
+```{r}
+microbenchmark::microbenchmark(times = 5,
+  with_select = data.table::fread(fname, select = 1:11),
+  without_select = data.table::fread(fname)
+)
+```
+
+# 5.4 Binary file formats
+
+## 5.4.1 Native binary formats: Rdata or Rds?
+
+
+```{r}
+save(mtcars, file = "cars.RData")
+saveRDS(mtcars, "cars.Rds")
+load("cars.RData")
+df_cars_rds <- readRDS("cars.Rds")
+identical(mtcars, df_cars_rds)
+```
+```{r}
+file.remove("cars.RData", "cars.Rds")
+```
+
+> Using `saveRDS()` is good practice because it forces you to specify object names.
+
+
+## 5.4.2 The feather file format
+
+```{r}
+write_feather(voyages, "voyages.feather")
+df_voyages_feather <- read_feather("voyages.feather")
+```
+
+```{python}
+import feather
+path = 'data/voyages.feather'
+df_voyages_feather = feather.read_dataframe(path)
+```
+
+# 5.5 Getting data from the internet
+
+```{r}
+url <- "https://www.monetdb.org/sites/default/files/voc_tsvs.zip"
+download.file(url, "voc_tsvs.zip") # download file
+unzip("voc_tsvs.zip", exdir = "data") # unzip files
+```
+
+```{r}
+file.remove("voc_tsvs.zip") # tidy up by removing the zip file
+```
+
+
+
+```{r}
+url <- "https://vincentarelbundock.github.io/Rdatasets/csv/datasets/co2.csv"
+download.file(url, "co2.csv")
+df_co2 <- read_csv("co2.csv")
+```
+
+
+```{r}
+library("WDI")
+WDIsearch("CO2") # search for data on a topic
+co2_transport <- WDI(indicator = "EN.CO2.TRAN.ZS")
+```
+
+
+# 5.6 Accessing data stored in packages
+
+
+```{r}
+data(package = "efficient")
+```
+
+```{r}
+list.files(system.file("extdata", package = "readr"))
+```
+

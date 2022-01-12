@@ -1,0 +1,724 @@
+---
+title: "Chapter19 - Shiny modules"
+output: html_notebook
+---
+
+```{r setup}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+```{r}
+library(shiny)
+```
+
+
+# 19.2 Module basics
+
+```{r}
+ui <- fluidPage(
+  selectInput("var", "Variable", names(mtcars)),
+  numericInput("bins", "bins", 10, min = 1),
+  plotOutput("hist")
+)
+server <- function(input, output, session) {
+  data <- reactive(mtcars[[input$var]])
+  output$hist <- renderPlot({
+    hist(data(), breaks = input$bins, main = input$var)
+  }, res = 96)
+}
+```
+
+
+## 19.2.1 Module UI
+
+
+Here I’ve returned the UI components in a `tagList()`, but you could also return them in an HTML container like `column()` or a `fluidRow()`. Returning a list is more flexible because it allows the caller of the module to choose the container. If you always place the module in the same container, you should return that instead, saving a little code in the UI.
+
+
+```{r}
+histogramUI <- function(id) {
+  tagList(
+    selectInput(NS(id, "var"), "Variable", names(mtcars)),
+    numericInput(NS(id, "bins"), "bins", 10, min = 1),
+    plotOutput(NS(id, "hist"))
+  )
+}
+```
+
+
+
+
+## 19.2.2 Module server
+
+```{r}
+histogramServer <- function(id) {
+  moduleServer(id, function(input, output, session) {
+    data <- reactive(mtcars[[input$var]])
+    output$hist <- renderPlot({
+      hist(data(), breaks = input$bins, main = input$var)
+    }, res = 96)
+  })
+}
+```
+
+
+## 19.2.3 Updated app
+
+```{r}
+histogramApp <- function() {
+  ui <- fluidPage(
+    histogramUI("hist1")
+  )
+  server <- function(input, output, session) {
+    histogramServer("hist1")
+  }
+  shinyApp(ui, server)  
+}
+histogramApp()
+```
+
+## 19.2.4 Namespacing
+
+```{r}
+ui <- fluidPage(
+  histogramUI("hist1"),
+  textOutput("out")
+)
+server <- function(input, output, session) {
+  histogramServer("hist1")
+  output$out <- renderText(paste0("Bins: ", input$bins))
+}
+shinyApp(ui, server)
+```
+
+
+# 19.3 Inputs and outputs
+
+## 19.3.1 Getting started: UI input + server output
+
+```{r}
+datasetInput <- function(id, filter = NULL) {
+  names <- ls("package:datasets")
+  if (!is.null(filter)) {
+    data <- lapply(names, get, "package:datasets")
+    names <- names[vapply(data, filter, logical(1))]
+  }
+  
+  selectInput(NS(id, "dataset"), "Pick a dataset", choices = names)
+}
+```
+
+```{r}
+datasetServer <- function(id) {
+  moduleServer(id, function(input, output, session) {
+    reactive(get(input$dataset, "package:datasets"))
+  })
+}
+```
+
+```{r}
+datasetApp <- function(filter = NULL) {
+  ui <- fluidPage(
+    datasetInput("dataset", filter = filter),
+    tableOutput("data")
+  )
+  server <- function(input, output, session) {
+    data <- datasetServer("dataset")
+    output$data <- renderTable(head(data()))
+  }
+  shinyApp(ui, server)
+}
+datasetApp(is.data.frame)
+```
+
+## 19.3.2 Case study: selecting a numeric variable
+
+```{r}
+selectVarInput <- function(id) {
+  selectInput(NS(id, "var"), "Variable", choices = NULL) 
+}
+
+
+find_vars <- function(data, filter) {
+  names(data)[vapply(data, filter, logical(1))]
+}
+
+selectVarServer <- function(id, data, filter = is.numeric) {
+  moduleServer(id, function(input, output, session) {
+    observeEvent(data(), {
+      updateSelectInput(session, "var", choices = find_vars(data(), filter))
+    })
+    
+    reactive(data()[[input$var]])
+  })
+}
+```
+
+
+```{r}
+selectVarApp <- function(filter = is.numeric) {
+  ui <- fluidPage(
+    datasetInput("data", is.data.frame),
+    selectVarInput("var"),
+    verbatimTextOutput("out")
+  )
+  server <- function(input, output, session) {
+    data <- datasetServer("data")
+    var <- selectVarServer("var", data, filter = filter)
+    output$out <- renderPrint(var())
+  }
+  
+  shinyApp(ui, server)
+}
+selectVarApp()
+```
+
+## 19.3.3 Server inputs
+```{r}
+stopifnot(is.reactive(data))
+stopifnot(!is.reactive(filter))
+```
+
+```{r}
+find_vars <- function(data, filter) {
+  stopifnot(is.data.frame(data))
+  stopifnot(is.function(filter))
+  names(data)[vapply(data, filter, logical(1))]
+}
+```
+
+
+## 19.3.4 Modules inside of modules
+
+```{r}
+selectDataVarUI <- function(id) {
+  tagList(
+    datasetInput(NS(id, "data"), filter = is.data.frame),
+    selectVarInput(NS(id, "var"))
+  )
+}
+selectDataVarServer <- function(id, filter = is.numeric) {
+  moduleServer(id, function(input, output, session) {
+    data <- datasetServer("data")
+    var <- selectVarServer("var", data, filter = filter)
+    var
+  })
+}
+
+selectDataVarApp <- function(filter = is.numeric) {
+  ui <- fluidPage(
+    sidebarLayout(
+      sidebarPanel(selectDataVarUI("var")),
+      mainPanel(verbatimTextOutput("out"))
+    )
+  )
+  server <- function(input, output, session) {
+    var <- selectDataVarServer("var", filter)
+    output$out <- renderPrint(var(), width = 40)
+  }
+  shinyApp(ui, server)
+}
+```
+
+## 19.3.5 Case study: histogram
+
+```{r}
+histogramOutput <- function(id) {
+  tagList(
+    numericInput(NS(id, "bins"), "bins", 10, min = 1, step = 1),
+    plotOutput(NS(id, "hist"))
+  )
+}
+
+histogramServer <- function(id, x, title = reactive("Histogram")) {
+  stopifnot(is.reactive(x))
+  stopifnot(is.reactive(title))
+  
+  moduleServer(id, function(input, output, session) {
+    output$hist <- renderPlot({
+      req(is.numeric(x()))
+      main <- paste0(title(), " [", input$bins, "]")
+      hist(x(), breaks = input$bins, main = main)
+    }, res = 96)
+  })
+}
+```
+
+```{r}
+histogramApp <- function() {
+  ui <- fluidPage(
+    sidebarLayout(
+      sidebarPanel(
+        datasetInput("data", is.data.frame),
+        selectVarInput("var"),
+      ),
+      mainPanel(
+        histogramOutput("hist")    
+      )
+    )
+  )
+  
+  server <- function(input, output, session) {
+    data <- datasetServer("data")
+    x <- selectVarServer("var", data)
+    histogramServer("hist", x)
+  }
+  shinyApp(ui, server)
+} 
+histogramApp()
+```
+
+```{r}
+histogramOutputBins <- function(id) {
+  numericInput(NS(id, "bins"), "bins", 10, min = 1, step = 1)
+}
+histogramOutputPlot <- function(id) {
+  plotOutput(NS(id, "hist"))
+}
+
+ui <- fluidPage(
+  sidebarLayout(
+    sidebarPanel(
+      datasetInput("data", is.data.frame),
+      selectVarInput("var"),
+      histogramOutputBins("hist")
+    ),
+    mainPanel(
+      histogramOutputPlot("hist")
+    )
+  )
+)
+```
+
+## 19.3.6 Multiple outputs
+
+```{r}
+selectVarServer <- function(id, data, filter = is.numeric) {
+  stopifnot(is.reactive(data))
+  stopifnot(!is.reactive(filter))
+  
+  moduleServer(id, function(input, output, session) {
+    observeEvent(data(), {
+      updateSelectInput(session, "var", choices = find_vars(data(), filter))
+    })
+    
+    list(
+      name = reactive(input$var),
+      value = reactive(data()[[input$var]])
+    )
+  })
+}
+```
+
+```{r}
+histogramApp <- function() {
+  ui <- fluidPage(
+    sidebarLayout(
+      sidebarPanel(
+        datasetInput("data", is.data.frame),
+        selectVarInput("var"),
+      ),
+      mainPanel(
+        histogramOutput("hist")    
+      )
+    )
+  )
+
+  server <- function(input, output, session) {
+    data <- datasetServer("data")
+    x <- selectVarServer("var", data)
+    histogramServer("hist", x$value, x$name)
+  }
+  shinyApp(ui, server)
+} 
+```
+
+```{r}
+ server <- function(input, output, session) {
+    data <- datasetServer("data")
+    c(value, name) %<-% selectVarServer("var", data)
+    histogramServer("hist", value, name)
+  }
+```
+
+
+# 19.4 Case studies
+
+## 19.4.1 Limited selection + other
+
+```{r}
+radioExtraUI <- function(id, label, choices, selected = NULL, placeholder = "Other") {
+  other <- textInput(NS(id, "other"), label = NULL, placeholder = placeholder)
+  
+  names <- if (is.null(names(choices))) choices else names(choices)
+  values <- unname(choices)
+  
+  radioButtons(NS(id, "primary"), 
+    label = label,
+    choiceValues = c(names, "other"),
+    choiceNames = c(as.list(values), list(other)),
+    selected = selected
+  )
+}
+```
+
+```{r}
+radioExtraServer <- function(id) {
+  moduleServer(id, function(input, output, session) {
+    observeEvent(input$other, ignoreInit = TRUE, {
+      updateRadioButtons(session, "primary", selected = "other")
+    })
+    
+    reactive({
+      if (input$primary == "other") {
+        input$other
+      } else {
+        input$primary
+      }
+    })
+  })
+}
+```
+
+
+```{r}
+radioExtraApp <- function(...) {
+  ui <- fluidPage(
+    radioExtraUI("extra", NULL, ...),
+    textOutput("value")
+  )
+  server <- function(input, output, server) {
+    extra <- radioExtraServer("extra")
+    output$value <- renderText(paste0("Selected: ", extra()))
+  }
+  
+  shinyApp(ui, server)
+}
+radioExtraApp(c("a", "b", "c"))
+```
+
+
+```{r}
+genderUI <- function(id, label = "Gender") {
+  radioExtraUI(id, 
+    label = label,
+    choices = c(
+      male = "Male",
+      female = "Female",
+      na = "Prefer not to say"
+    ), 
+    placeholder = "Self-described", 
+    selected = "na"
+  )
+}
+```
+
+
+## 19.4.2 Wizard
+
+
+```{r}
+nextPage <- function(id, i) {
+  actionButton(NS(id, paste0("go_", i, "_", i + 1)), "next")
+}
+prevPage <- function(id, i) {
+  actionButton(NS(id, paste0("go_", i, "_", i - 1)), "prev")
+}
+```
+
+```{r}
+wrapPage <- function(title, page, button_left = NULL, button_right = NULL) {
+  tabPanel(
+    title = title, 
+    fluidRow(
+      column(12, page)
+    ), 
+    fluidRow(
+      column(6, button_left),
+      column(6, button_right)
+    )
+  )
+}
+```
+
+
+```{r}
+wizardUI <- function(id, pages, doneButton = NULL) {
+  stopifnot(is.list(pages))
+  n <- length(pages)
+  
+  wrapped <- vector("list", n)
+  for (i in seq_along(pages)) {
+    # First page only has next; last page only prev + done
+    lhs <- if (i > 1) prevPage(id, i)
+    rhs <- if (i < n) nextPage(id, i) else doneButton
+    wrapped[[i]] <- wrapPage(paste0("page_", i), pages[[i]], lhs, rhs)
+  }
+  
+  # Create tabsetPanel
+  # https://github.com/rstudio/shiny/issues/2927
+  wrapped$id <- NS(id, "wizard")
+  wrapped$type <- "hidden"
+  do.call("tabsetPanel", wrapped)
+}
+```
+
+```{r}
+wizardServer <- function(id, n) {
+  moduleServer(id, function(input, output, session) {
+    changePage <- function(from, to) {
+      observeEvent(input[[paste0("go_", from, "_", to)]], {
+        updateTabsetPanel(session, "wizard", selected = paste0("page_", to))
+      })  
+    }
+    ids <- seq_len(n)
+    lapply(ids[-1], function(i) changePage(i, i - 1))
+    lapply(ids[-n], function(i) changePage(i, i + 1))
+  })
+}
+```
+
+```{r}
+wizardApp <- function(...) {
+  pages <- list(...)
+  
+  ui <- fluidPage(
+    wizardUI("whiz", pages)
+  )
+  server <- function(input, output, session) {
+    wizardServer("whiz", length(pages))
+  }
+  shinyApp(ui, server)
+}
+wizardApp(
+  "Page 1",
+  "Page 2",
+  "Page 3"
+)
+```
+
+
+```{r}
+page1 <- tagList(
+  textInput("name", "What's your name?")
+)
+page2 <- tagList(
+  numericInput("age", "How old are you?", 20)
+)
+page3 <- tagList(
+  "Is this data correct?",
+  verbatimTextOutput("info")
+)
+
+ui <- fluidPage(
+  wizardUI(
+    id = "demographics", 
+    pages = list(page1, page2, page3), 
+    doneButton = actionButton("done", "Submit")
+  )
+)
+server <- function(input, output, session) {
+  wizardServer("demographics", 3)
+
+  observeEvent(input$done, showModal(
+    modalDialog("Thank you!", footer = NULL)
+  ))
+  
+  output$info <- renderText(paste0(
+    "Age: ", input$age, "\n",
+    "Name: ", input$name, "\n"
+  ))
+}
+shinyApp(ui, server)
+```
+
+
+## 19.4.3 Dynamic UI
+
+
+```{r}
+filterUi <- function(id) {
+  uiOutput(NS(id, "controls"))
+}
+```
+
+```{r}
+library(purrr)
+
+make_ui <- function(x, id, var) {
+  if (is.numeric(x)) {
+    rng <- range(x, na.rm = TRUE)
+    sliderInput(id, var, min = rng[1], max = rng[2], value = rng)
+  } else if (is.factor(x)) {
+    levs <- levels(x)
+    selectInput(id, var, choices = levs, selected = levs, multiple = TRUE)
+  } else {
+    # Not supported
+    NULL
+  }
+}
+filter_var <- function(x, val) {
+  if (is.numeric(x)) {
+    !is.na(x) & x >= val[1] & x <= val[2]
+  } else if (is.factor(x)) {
+    x %in% val
+  } else {
+    # No control, so don't filter
+    TRUE
+  }
+}
+```
+
+
+```{r}
+filterServer <- function(id, df) {
+  stopifnot(is.reactive(df))
+
+  moduleServer(id, function(input, output, session) {
+    vars <- reactive(names(df()))
+    
+    output$controls <- renderUI({
+      map(vars(), function(var) make_ui(df()[[var]], NS(id, var), var))
+    })
+    
+    reactive({
+      each_var <- map(vars(), function(var) filter_var(df()[[var]], input[[var]]))
+      reduce(each_var, `&`)
+    })
+  })
+}
+```
+
+
+```{r}
+filterApp <- function() {
+  ui <- fluidPage(
+    sidebarLayout(
+      sidebarPanel(
+        datasetInput("data", is.data.frame),
+        textOutput("n"),
+        filterUi("filter"),
+      ),
+      mainPanel(
+        tableOutput("table")    
+      )
+    )
+  )
+  server <- function(input, output, session) {
+    df <- datasetServer("data")
+    filter <- filterServer("filter", df)
+    
+    output$table <- renderTable(df()[filter(), , drop = FALSE])
+    output$n <- renderText(paste0(sum(filter()), " rows"))
+  }
+  shinyApp(ui, server)
+}
+filterApp()
+```
+
+# 19.5 Single object modules
+
+```{r}
+histogramUI <- function(id, df) {
+  tagList(
+    selectInput(NS(id, "var"), "Variable", names(df)),
+    numericInput(NS(id, "bins"), "bins", 10, min = 1),
+    plotOutput(NS(id, "hist"))
+  )
+}
+
+histogramServer <- function(id, df) {
+  moduleServer(id, function(input, output, session) {
+    data <- reactive(df[[input$var]])
+    output$hist <- renderPlot({
+      hist(data(), breaks = input$bins, main = input$var)
+    }, res = 96)
+  })
+}
+```
+
+```{r}
+ui <- fluidPage(
+  tabsetPanel(
+    tabPanel("mtcars", histogramUI("mtcars", mtcars)),
+    tabPanel("iris", histogramUI("iris", iris))
+  )
+)
+server <- function(input, output, session) {
+  histogramServer("mtcars", mtcars)
+  histogramServer("iris", iris)
+}
+```
+
+
+```{r}
+histogramApp <- function(id, df) {
+  list(
+    ui = histogramUI(id, df), 
+    server = histogramServer(id, df)
+  )
+}
+```
+
+```{r}
+hist1 <- histogramApp("mtcars", mtcars)
+hist2 <- histogramApp("iris", iris)
+
+ui <- fluidPage(
+  tabsetPanel(
+    tabPanel("mtcars", hist1$ui()),
+    tabPanel("iris", hist2$ui())
+  )
+)
+server <- function(input, output, session) {
+  hist1$server()
+  hist2$server()
+}
+```
+
+# 19.6 Exercises
+
+### question 2
+
+```{r}
+summaryOutput <- function(id) {
+  tags$ul(
+    tags$li("Min: ", textOutput(NS(id, "min"), inline = TRUE)),
+    tags$li("Max: ", textOutput(NS(id, "max"), inline = TRUE)),
+    tags$li("Missing: ", textOutput(NS(id, "n_na"), inline = TRUE))
+  )
+}
+
+summaryServer <- function(id, var) {
+  moduleServer(id, function(input, output, session) {
+    rng <- reactive({
+      req(var())
+      range(var(), na.rm = TRUE)
+    })
+
+    output$min <- renderText(rng()[[1]])
+    output$max <- renderText(rng()[[2]])
+    output$n_na <- renderText(sum(is.na(var())))
+  })
+}
+```
+
+```{r}
+selectVarApp <- function(filter = is.numeric) {
+    ui <- fluidPage(
+        datasetInput("data", is.data.frame),
+        selectVarInput("var"),
+        summaryOutput("summary")
+    )
+    server <- function(input, output, session) {
+        data <- datasetServer("data")
+        var <- selectVarServer("var", data, filter = filter)
+        summaryServer("summary", var)
+    }
+
+    shinyApp(ui, server)
+}
+
+selectVarApp()
+```
